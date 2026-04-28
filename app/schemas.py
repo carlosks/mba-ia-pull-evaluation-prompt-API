@@ -1,14 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 
-class UsuarioCreate(BaseModel):
-    nome: str
-    email: str = Field(..., pattern=r"^.+@.+\..+$")
-
-
-class Usuario(BaseModel):
-    id: int
-    nome: str
-    email: str
-
-    class Config:
-        from_attributes = True
+class UserCreate(BaseModel):
+    email: EmailStr = Field(..., pattern=r'^[\w\.-]+@[\w\.-]+\.\w+$')

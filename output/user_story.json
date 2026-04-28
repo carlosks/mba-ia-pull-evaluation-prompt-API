@@ -1,0 +1,7 @@
+{
+  "user_story": "Como um usuário do sistema, eu quero que o formulário de cadastro valide meu endereço de e-mail para que eu possa garantir que estou recebendo comunicações importantes.",
+  "acceptance_criteria": [
+    "Dado que eu estou no formulário de cadastro, Quando eu insiro um endereço de e-mail inválido, Então uma mensagem de erro deve ser exibida informando que o e-mail é inválido.",
+    "Dado que eu estou no formulário de cadastro, Quando eu insiro um endereço de e-mail válido, Então o formulário deve ser enviado com sucesso sem exibir mensagens de erro."
+  ]
+}

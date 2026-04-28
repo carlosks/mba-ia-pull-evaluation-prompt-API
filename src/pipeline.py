@@ -1,67 +1,70 @@
-# src/pipeline.py
-
+import os
+import json
+import yaml
 from dotenv import load_dotenv
 from langchain import hub
-from langchain.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate
 from src.utils import get_llm
-import yaml
-import os
-import subprocess
 
+# ================================
+# CONFIG
+# ================================
 load_dotenv()
-
 llm = get_llm()
 
 
-# =========================================================
-# CARREGAR PROMPT (HUB + LOCAL + JINJA2)
-# =========================================================
-def carregar_prompt(nome: str):
-    owner = os.getenv("LANGSMITH_HUB_OWNER", "carlosks")
-
-    # 🔹 tentar Hub
+# ================================
+# CARREGAR PROMPT (Hub + Local)
+# ================================
+def carregar_prompt(nome):
     try:
-        print(f"🌐 Tentando Hub: {owner}/{nome}")
-        return hub.pull(f"{owner}/{nome}")
+        print(f"\n🌐 Tentando Hub: carlosks/{nome}")
+        return hub.pull(f"carlosks/{nome}")
     except Exception:
         print("⚠️ Hub não encontrado → usando local")
 
-    # 🔹 fallback local
     path = f"prompts/{nome}.yml"
-
-    if not os.path.exists(path):
-        raise FileNotFoundError(f"Prompt não encontrado: {path}")
 
     with open(path, "r", encoding="utf-8") as f:
         data = yaml.safe_load(f)
 
-    messages = [(p["role"], p["content"]) for p in data["prompts"]]
-
     print(f"📁 Usando local: {path}")
 
-    return ChatPromptTemplate.from_messages(
-        messages,
-        template_format="jinja2"  # evita erro com {}
-    )
+    return ChatPromptTemplate.from_messages([
+        (msg["role"], msg["content"])
+        for msg in data["prompts"]
+    ])
 
 
-# =========================================================
-# BUG → USER STORY
-# =========================================================
-def gerar_user_story(bug_report: str) -> str:
+# ================================
+# GERAR USER STORY (JSON)
+# ================================
+def gerar_user_story(bug_report):
     prompt = carregar_prompt("bug_to_user_story_v18")
 
     result = (prompt | llm).invoke({
         "bug_report": bug_report
     })
 
-    return result.content
+    try:
+        data = json.loads(result.content)
+
+        user_story = data["user_story"]
+        criterios = data["acceptance_criteria"]
+
+        return user_story, criterios, data
+
+    except Exception as e:
+        print("\n❌ Erro ao converter JSON:")
+        print(e)
+        print("\n📦 Resposta bruta:\n", result.content)
+        return None, None, None
 
 
-# =========================================================
-# USER STORY → API
-# =========================================================
-def gerar_api(user_story: str) -> str:
+# ================================
+# GERAR API
+# ================================
+def gerar_api(user_story):
     prompt = carregar_prompt("user_story_to_api_v1")
 
     result = (prompt | llm).invoke({
@@ -71,119 +74,132 @@ def gerar_api(user_story: str) -> str:
     return result.content
 
 
-# =========================================================
-# USER STORY → CÓDIGO SIMPLES
-# =========================================================
-def gerar_codigo(user_story: str) -> str:
-    prompt = carregar_prompt("user_story_to_code_v1")
-
-    result = (prompt | llm).invoke({
-        "user_story": user_story
-    })
-
-    return result.content
-
-
-# =========================================================
+# ================================
 # SALVAR ARQUIVOS GERADOS
-# =========================================================
-def salvar_arquivos(codigo: str):
-    arquivos = {}
-    atual = None
-    buffer = []
+# ================================
+def salvar_arquivos(codigo):
+    arquivos = {
+        "app/schemas.py": "",
+        "app/service.py": "",
+        "app/main.py": "",
+        "tests/test_api.py": ""
+    }
 
-    for linha in codigo.split("\n"):
+    current_file = None
 
-        if linha.startswith("###"):
-            if atual and buffer:
-                arquivos[atual] = "\n".join(buffer).strip()
-                buffer = []
-
-            atual = linha.replace("###", "").strip()
+    for line in codigo.split("\n"):
+        if "### app/schemas.py" in line:
+            current_file = "app/schemas.py"
+            continue
+        elif "### app/service.py" in line:
+            current_file = "app/service.py"
+            continue
+        elif "### app/main.py" in line:
+            current_file = "app/main.py"
+            continue
+        elif "### tests/test_api.py" in line:
+            current_file = "tests/test_api.py"
             continue
 
-        if "```" in linha:
-            continue
+        if current_file and not line.startswith("```"):
+            arquivos[current_file] += line + "\n"
 
-        if atual:
-            buffer.append(linha)
+    # criar pastas
+    os.makedirs("app", exist_ok=True)
+    os.makedirs("tests", exist_ok=True)
 
-    if atual and buffer:
-        arquivos[atual] = "\n".join(buffer).strip()
-
-    for path, conteudo in arquivos.items():
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-
+    # salvar arquivos
+    for path, content in arquivos.items():
         with open(path, "w", encoding="utf-8") as f:
-            f.write(conteudo)
+            f.write(content.strip())
 
     print("\n✅ Arquivos gerados:")
     for path in arquivos:
         print(f" - {path}")
 
 
-# =========================================================
-# GERAR REQUIREMENTS.TXT
-# =========================================================
+# ================================
+# GERAR REQUIREMENTS
+# ================================
 def gerar_requirements():
-    conteudo = """fastapi
+    content = """fastapi
 uvicorn
 pydantic
-sqlalchemy
 pytest
+python-dotenv
+langchain
+openai
+jinja2
 """
 
-    with open("requirements.txt", "w", encoding="utf-8") as f:
-        f.write(conteudo)
+    with open("requirements.txt", "w") as f:
+        f.write(content)
 
     print("\n📦 requirements.txt gerado!")
 
 
-# =========================================================
+# ================================
 # PIPELINE PRINCIPAL
-# =========================================================
+# ================================
 def executar_pipeline():
-
+    print("\n🔥 USANDO MODELO:", llm.model_name)
     print("\n========================================")
     print("🚀 PIPELINE: Bug → API AUTOMÁTICA")
-    print("========================================")
+    print("========================================\n")
 
-    bug_report = input("\n🪲 Digite o bug:\n\n")
+    bug_report = input("🪲 Digite o bug:\n\n")
 
-    # 1. USER STORY
+    # ===== USER STORY =====
     print("\n🔄 Gerando User Story...\n")
-    user_story = gerar_user_story(bug_report)
+
+    user_story, criterios, data = gerar_user_story(bug_report)
+
+    if not user_story:
+        return
+
+    print("\n📘 USER STORY:\n")
     print(user_story)
 
-    # 2. ESCOLHA
+    print("\n✅ CRITÉRIOS DE ACEITAÇÃO:\n")
+    for c in criterios:
+        print(f"- {c}")
+
+    # salvar JSON estruturado
+    os.makedirs("output", exist_ok=True)
+
+    with open("output/user_story.json", "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+
+    print("\n💾 JSON salvo em: output/user_story.json")
+
+    # ===== ESCOLHA =====
     print("\nEscolha:")
     print("1 - API completa")
-    print("2 - Código simples")
+    print("2 - Código simples\n")
 
-    opcao = input("\nOpção: ").strip()
+    opcao = input("Opção: ")
 
-    # 3. GERAÇÃO
-    if opcao == "1":
-        print("\n🔄 Gerando API...\n")
-        codigo = gerar_api(user_story)
-    else:
-        print("\n🔄 Gerando código...\n")
-        codigo = gerar_codigo(user_story)
+    if opcao != "1":
+        print("\n⚠️ Opção inválida ou não implementada")
+        return
 
-    # 4. RESULTADO
+    # ===== GERAR API =====
+    print("\n🔄 Gerando API...\n")
+
+    codigo = gerar_api(user_story)
+
     print("\n================ RESULTADO ================\n")
     print(codigo)
 
-    # 5. SALVAR
-    salvar = input("\n💾 Salvar arquivos? (s/n): ").lower()
+    salvar = input("\n💾 Salvar arquivos? (s/n): ")
 
-    if salvar == "s":
+    if salvar.lower() == "s":
         salvar_arquivos(codigo)
         gerar_requirements()
 
 
-# =========================================================
-# MAIN
-# =========================================================
+# ================================
+# EXECUTAR
+# ================================
 if __name__ == "__main__":
     executar_pipeline()

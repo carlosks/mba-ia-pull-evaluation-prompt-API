@@ -1,18 +1,10 @@
-from sqlalchemy.orm import Session
-from app import models, schemas
+from fastapi import HTTPException
+from app.schemas import UserCreate
 
-def criar_usuario(db: Session, usuario: schemas.UsuarioCreate):
-    db_usuario = models.Usuario(
-        nome=usuario.nome,
-        email=usuario.email
-    )
+users_db = []
 
-    db.add(db_usuario)
-    db.commit()
-    db.refresh(db_usuario)
-
-    return db_usuario
-
-
-def listar_usuarios(db: Session):
-    return db.query(models.Usuario).all()
+def create_user(user: UserCreate):
+    if any(u.email == user.email for u in users_db):
+        raise HTTPException(status_code=400, detail="Email already registered")
+    users_db.append(user)
+    return user
