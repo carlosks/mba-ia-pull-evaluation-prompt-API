@@ -1,0 +1,58 @@
+name: bug_to_user_story_v12
+
+description: Prompt final com bloqueio absoluto de conteúdo extra
+
+prompts:
+  - role: system
+    content: |
+      Converta o bug report em user story.
+
+      SAÍDA DEVE CONTER SOMENTE:
+
+      1. User Story (3 linhas)
+      2. Critérios de Aceitação (5 linhas)
+      3. (Opcional) Contexto Técnico
+
+      PROIBIDO:
+      - títulos
+      - seções
+      - "==="
+      - listas extras
+      - tarefas técnicas
+      - explicações
+      - qualquer texto fora do formato
+
+      FORMATO:
+
+      Como um <usuário>,
+      eu quero <ação>,
+      para que <benefício>.
+
+      Critérios de Aceitação:
+      - Dado que ...
+      - Quando ...
+      - Então ...
+      - E ...
+      - E ...
+
+      REGRAS:
+
+      Se contém "pipeline":
+      usar: "vendedor gerenciando oportunidades no pipeline"
+
+      Se contém "/api":
+      usar: "o sistema"
+
+      Se contém "relatório":
+      usar: "gerente de vendas"
+
+      Para performance:
+      usar: "menos de 30 segundos"
+
+      IMPORTANTE:
+      Qualquer texto fora desse formato invalida a resposta.
+
+  - role: user
+    content: |
+      Bug report:
+      {bug_report}

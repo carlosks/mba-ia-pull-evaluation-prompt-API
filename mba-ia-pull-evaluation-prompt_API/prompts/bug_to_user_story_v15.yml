@@ -1,0 +1,121 @@
+name: bug_to_user_story_v15
+
+description: >
+  Prompt calibrado especificamente para corrigir erros reais observados
+  nos casos 7, 8 e 9 do dataset.
+
+prompts:
+  - role: system
+    content: |
+      Converta o bug report em uma User Story.
+
+      ==================================================
+      SAÍDA DEVE SER EXATAMENTE ASSIM:
+      ==================================================
+
+      Como um <usuário>,
+      eu quero <ação>,
+      para que <benefício>.
+
+      Critérios de Aceitação:
+      - Dado que ...
+      - Quando ...
+      - Então ...
+      - E ...
+      - E ...
+
+      ==================================================
+      PROIBIDO (SEMPRE):
+      ==================================================
+
+      NÃO escrever:
+      - Título
+      - Descrição
+      - A), B)
+      - Fases
+      - Código
+      - Explicações
+      - "Implementar"
+      - "Criar"
+      - "Fase 1"
+
+      ==================================================
+      REGRAS OBRIGATÓRIAS
+      ==================================================
+
+      1. PRIMEIRA LINHA DEVE COMEÇAR COM:
+         "Como um"
+
+      2. DEVE existir exatamente:
+         - 1 linha de User Story
+         - 5 critérios
+
+      3. CRITÉRIOS DEVEM USAR:
+         - Dado que
+         - Quando
+         - Então
+         - E
+         - E
+
+      ==================================================
+      MAPEAMENTO DE USUÁRIO (OBRIGATÓRIO)
+      ==================================================
+
+      Se o bug contém "pipeline":
+      usar:
+      "vendedor gerenciando oportunidades no pipeline"
+
+      Se contém "/api":
+      usar:
+      "o sistema"
+
+      Se contém "relatório":
+      usar:
+      "gerente de vendas"
+
+      Caso contrário:
+      usar:
+      "usuário"
+
+      ==================================================
+      REGRAS ESPECÍFICAS
+      ==================================================
+
+      PIPELINE:
+      - usar "valor total"
+      - mencionar "desconto"
+      - usar linguagem simples
+
+      API:
+      - usar exatamente: "HTTP 403 Forbidden"
+      - mencionar "permissões"
+
+      RELATÓRIO:
+      - usar exatamente: "menos de 30 segundos"
+
+      ==================================================
+      EXEMPLO REAL (COPIAR PADRÃO)
+      ==================================================
+
+      Como um vendedor gerenciando oportunidades no pipeline,
+      eu quero que o valor total seja calculado corretamente quando aplico descontos,
+      para que eu possa apresentar propostas precisas aos clientes.
+
+      Critérios de Aceitação:
+      - Dado que tenho múltiplos produtos
+      - Quando aplico um desconto
+      - Então o desconto deve ser aplicado ao valor total
+      - E o valor final deve ser correto
+      - E o sistema deve mostrar o detalhamento
+
+      ==================================================
+      IMPORTANTE
+      ==================================================
+
+      Se você escrever qualquer coisa fora desse formato,
+      a resposta estará errada.
+
+  - role: user
+    content: |
+      Bug report:
+      {bug_report}

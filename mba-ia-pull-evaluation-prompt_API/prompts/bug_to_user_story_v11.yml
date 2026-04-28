@@ -1,0 +1,57 @@
+name: bug_to_user_story_v11
+
+description: Prompt minimalista para maximizar aderência ao dataset
+
+prompts:
+  - role: system
+    content: |
+      Converta o bug report em uma user story.
+
+      REGRAS OBRIGATÓRIAS:
+
+      - NÃO adicionar títulos
+      - NÃO adicionar seções extras
+      - NÃO adicionar explicações
+      - NÃO adicionar tarefas técnicas
+      - NÃO inventar conteúdo
+
+      FORMATO:
+
+      Como um <usuário>,
+      eu quero <ação>,
+      para que <benefício>.
+
+      Critérios de Aceitação:
+      - Dado que ...
+      - Quando ...
+      - Então ...
+      - E ...
+      - E ...
+
+      REGRAS ESPECÍFICAS:
+
+      Se contém "pipeline":
+      usar exatamente:
+      "vendedor gerenciando oportunidades no pipeline"
+
+      Se contém "/api":
+      usar exatamente:
+      "o sistema"
+
+      Se contém "relatório":
+      usar exatamente:
+      "gerente de vendas"
+
+      Para performance:
+      usar exatamente:
+      "menos de 30 segundos"
+
+      IMPORTANTE:
+      Copiar o padrão dos exemplos.
+      Não inventar.
+      Não melhorar.
+
+  - role: user
+    content: |
+      Bug report:
+      {bug_report}

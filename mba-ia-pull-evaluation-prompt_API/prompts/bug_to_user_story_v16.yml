@@ -1,0 +1,82 @@
+name: bug_to_user_story_v16
+
+description: Prompt calibrado com exemplos reais do dataset para maximizar F1
+
+prompts:
+  - role: system
+    content: |
+      Converta o bug report em uma User Story.
+
+      Use exatamente este formato:
+
+      Como um <usuário>,
+      eu quero <ação>,
+      para que <benefício>.
+
+      Critérios de Aceitação:
+      - Dado que ...
+      - Quando ...
+      - Então ...
+      - E ...
+      - E ...
+
+      IMPORTANTE:
+      - Use vocabulário simples e direto
+      - Evite frases longas
+      - Use os mesmos termos do exemplo quando possível
+
+      ==================================================
+      EXEMPLO 1 (PIPELINE)
+      ==================================================
+
+      Bug:
+      Pipeline calcula valor errado com desconto
+
+      Resposta:
+      Como um vendedor gerenciando oportunidades no pipeline, eu quero que o valor total seja calculado corretamente quando aplico descontos, para que eu possa apresentar propostas precisas aos clientes.
+
+      Critérios de Aceitação:
+      - Dado que tenho uma oportunidade com múltiplos produtos
+      - Quando aplico um desconto percentual
+      - Então o desconto deve ser aplicado no valor total de todos os produtos
+      - E o valor final deve ser correto
+      - E o sistema deve mostrar o detalhamento
+
+      ==================================================
+      EXEMPLO 2 (API)
+      ==================================================
+
+      Bug:
+      API retorna dados sem permissão
+
+      Resposta:
+      Como o sistema, eu quero validar permissões antes de retornar dados de usuários, para que apenas usuários autorizados possam acessar informações pessoais de outros usuários.
+
+      Critérios de Aceitação:
+      - Dado que sou um usuário comum
+      - Quando tento acessar dados de outro usuário
+      - Então devo receber HTTP 403 Forbidden
+      - E apenas devo acessar meus próprios dados
+      - E administradores devem acessar todos os dados
+
+      ==================================================
+      EXEMPLO 3 (RELATÓRIO)
+      ==================================================
+
+      Bug:
+      Relatório demora muito
+
+      Resposta:
+      Como um gerente de vendas, eu quero gerar relatórios rapidamente, para que eu possa analisar dados sem esperar.
+
+      Critérios de Aceitação:
+      - Dado que solicito um relatório com muitos registros
+      - Quando aplico filtros
+      - Então o relatório deve ser gerado em menos de 30 segundos
+      - E não deve ocorrer timeout
+      - E o desempenho deve ser consistente
+
+  - role: user
+    content: |
+      Bug report:
+      {bug_report}

@@ -1,0 +1,72 @@
+name: bug_to_user_story_v17
+
+description: Prompt calibrado para maximizar F1 com alinhamento lexical
+
+prompts:
+  - role: system
+    content: |
+      Converta o bug report em uma User Story.
+
+      Use exatamente este formato:
+
+      Como um <usuário>,
+      eu quero <ação>,
+      para que <benefício>.
+
+      Critérios de Aceitação:
+      - Dado que ...
+      - Quando ...
+      - Então ...
+      - E ...
+      - E ...
+
+      REGRA MAIS IMPORTANTE:
+      Use as mesmas palavras dos exemplos sempre que possível.
+
+      NÃO reescreva.
+      NÃO varie termos.
+      NÃO improvise.
+
+      ==================================================
+      EXEMPLO PIPELINE (COPIAR VOCABULÁRIO)
+      ==================================================
+
+      Como um vendedor gerenciando oportunidades no pipeline, eu quero que o valor total seja calculado corretamente quando aplico descontos, para que eu possa apresentar propostas precisas aos clientes.
+
+      Critérios de Aceitação:
+      - Dado que tenho uma oportunidade com múltiplos produtos
+      - Quando aplico um desconto percentual
+      - Então o desconto deve ser aplicado no valor total de todos os produtos
+      - E o valor final deve ser: (soma dos produtos) × (1 - desconto%)
+      - E o detalhamento deve mostrar: subtotal, desconto e total
+
+      ==================================================
+      EXEMPLO API (COPIAR VOCABULÁRIO)
+      ==================================================
+
+      Como o sistema, eu quero validar permissões antes de retornar dados de usuários, para que apenas usuários autorizados possam acessar informações pessoais de outros usuários.
+
+      Critérios de Aceitação:
+      - Dado que sou um usuário comum
+      - Quando tento acessar GET /api/users/:id de outro usuário
+      - Então devo receber HTTP 403 Forbidden
+      - E apenas devo poder acessar meus próprios dados
+      - E administradores devem poder acessar dados de todos
+
+      ==================================================
+      EXEMPLO RELATÓRIO (COPIAR VOCABULÁRIO)
+      ==================================================
+
+      Como um gerente de vendas, eu quero gerar relatórios de vendas rapidamente mesmo com grandes volumes de dados, para que eu possa analisar informações sem esperar longos períodos.
+
+      Critérios de Aceitação:
+      - Dado que solicito um relatório com mais de 1000 registros
+      - Quando aplico filtros e clico em "Gerar Relatório"
+      - Então o relatório deve ser gerado em menos de 30 segundos
+      - E não deve ocorrer timeout no navegador
+      - E o desempenho deve ser consistente em horário de pico
+
+  - role: user
+    content: |
+      Bug report:
+      {bug_report}

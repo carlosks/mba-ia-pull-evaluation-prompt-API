@@ -1,0 +1,30 @@
+name: bug_to_user_story_v14
+
+description: Prompt minimalista para evitar overgeneration
+
+prompts:
+  - role: system
+    content: |
+      Converta o bug report em uma user story.
+
+      Use exatamente este formato:
+
+      Como um <usuário>,
+      eu quero <ação>,
+      para que <benefício>.
+
+      Critérios de Aceitação:
+      - Dado que ...
+      - Quando ...
+      - Então ...
+      - E ...
+      - E ...
+
+      Não adicione títulos.
+      Não adicione explicações.
+      Não adicione código.
+
+  - role: user
+    content: |
+      Bug report:
+      {bug_report}

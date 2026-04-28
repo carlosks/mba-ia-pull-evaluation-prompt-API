@@ -1,0 +1,74 @@
+# Este arquivo contém o prompt inicial de BAIXA QUALIDADE que você deve otimizar.
+# Os problemas são intencionais (ex: {bug_report} duplicado no system e user prompt,
+# instruções vagas, falta de exemplos, sem persona definida).
+# Use-o como base para entender o que precisa ser melhorado na v2.
+
+bug_to_user_story_v1:
+  description: "Prompt para converter relatos de bugs em User Stories"
+  system_prompt: |
+    Você é um assistente que ajuda a transformar relatos de bugs de usuários em tarefas para desenvolvedores.
+
+    Analise o relato de bug abaixo e crie uma user story a partir dele.
+
+    Relato de Bug:
+    ---
+   [20-Apr-2026 15:03:52] WARNING: [pool www] child 78 said into stderr: "NOTICE: PHP message: PHP Warning:  Undefined array key "app" in /opt/sistemas/portalfornecedor/core/Sistema.php on line 85"
+[20-Apr-2026 15:03:52] WARNING: [pool www] child 78 said into stderr: "NOTICE: PHP message: PHP Warning:  Undefined array key "mostrar_ambiente" in /opt/sistemas/portalfornecedor/core/Sistema.php on line 89"
+[20-Apr-2026 15:03:52] WARNING: [pool www] child 78 said into stderr: "NOTICE: PHP message: PHP Warning:  Constant APP already defined in /opt/sistemas/portalfornecedor/inicia.php on line 10"
+[20-Apr-2026 15:04:08] WARNING: [pool www] child 79 said into stderr: "NOTICE: PHP message: Xdebug: [Log Files] File '/tmp/xdebug.log' could not be opened."
+[20-Apr-2026 15:04:08] WARNING: [pool www] child 79 said into stderr: "NOTICE: PHP message: PHP Warning:  Undefined array key "app" in /opt/sistemas/portalfornecedor/core/Sistema.php on line 82"
+[20-Apr-2026 15:04:08] WARNING: [pool www] child 79 said into stderr: "NOTICE: PHP message: PHP Warning:  Undefined array key "app" in /opt/sistemas/portalfornecedor/core/Sistema.php on line 85"
+[20-Apr-2026 15:04:08] WARNING: [pool www] child 79 said into stderr: "NOTICE: PHP message: PHP Warning:  Undefined array key "mostrar_ambiente" in /opt/sistemas/portalfornecedor/core/Sistema.php on line 89"
+[20-Apr-2026 15:05:37] WARNING: [pool www] child 78 said into stderr: "NOTICE: PHP message: PHP Warning:  Undefined array key "editais" in /opt/sistemas/portalfornecedor/core/bd/SQLServer.php on line 40"
+[20-Apr-2026 15:06:08] WARNING: [pool www] child 78 said into stderr: "NOTICE: PHP message: PHP Deprecated:  Return type of Predis\Client::getIterator() should either be compatible with IteratorAggregate::getIterator(): Traversable, or the #[\ReturnTypeWillChange] attribute should be used to temporarily suppress the notice in /opt/sistemas/portalfornecedor/lib/predis-1.1/src/Client.php on line 532"
+[20-Apr-2026 15:06:08] WARNING: [pool www] child 78 said into stderr: "NOTICE: PHP message: PHP Deprecated:  Use of "static" in callables is deprecated in /opt/sistemas/portalfornecedor/lib/predis-1.1/src/Command/Processor/KeyPrefixProcessor.php on line 200"
+[20-Apr-2026 15:06:08] WARNING: [pool www] child 78 said into stderr: "NOTICE: PHP message: PHP Deprecated:  Use of "static" in callables is deprecated in /opt/sistemas/portalfornecedor/lib/predis-1.1/src/Command/Processor/KeyPrefixProcessor.php on line 200"
+[20-Apr-2026 15:06:08] WARNING: [pool www] child 78 said into stderr: "NOTICE: PHP message: PHP Warning:  Constant CSSJSV already defined in /opt/sistemas/portalfornecedor/core/templates/TemplateV2.php on line 31"
+[20-Apr-2026 15:06:08] WARNING: [pool www] child 78 said into stderr: "NOTICE: PHP message: PHP Deprecated:  Use of "static" in callables is deprecated in /opt/sistemas/portalfornecedor/lib/predis-1.1/src/Command/Processor/KeyPrefixProcessor.php on line 200"
+[20-Apr-2026 15:06:08] WARNING: [pool www] child 78 said into stderr: "NOTICE: PHP message: PHP Deprecated:  Use of "static" in callables is deprecated in /opt/sistemas/portalfornecedor/lib/predis-1.1/src/Command/Processor/KeyPrefixProcessor.php on line 200"
+[20-Apr-2026 15:06:08] WARNING: [pool www] child 79 said into stderr: "NOTICE: PHP message: PHP Warning:  Constant APP already defined in /opt/sistemas/portalfornecedor/inicia.php on line 10"
+[20-Apr-2026 15:06:10] WARNING: [pool www] child 79 said into stderr: "NOTICE: PHP message: PHP Warning:  Undefined array key "editais" in /opt/sistemas/portalfornecedor/core/bd/SQLServer.php on line 40"
+[20-Apr-2026 15:06:10] WARNING: [pool www] child 79 said into stderr: "NOTICE: PHP message: PHP Deprecated:  Return type of Predis\Client::getIterator() should either be compatible with IteratorAggregate::getIterator(): Traversable, or the #[\ReturnTypeWillChange] attribute should be used to temporarily suppress the notice in /opt/sistemas/portalfornecedor/lib/predis-1.1/src/Client.php on line 532"
+[20-Apr-2026 15:06:10] WARNING: [pool www] child 79 said into stderr: "NOTICE: PHP message: PHP Deprecated:  Use of "static" in callables is deprecated in /opt/sistemas/portalfornecedor/lib/predis-1.1/src/Command/Processor/KeyPrefixProcessor.php on line 200"
+[20-Apr-2026 15:06:10] WARNING: [pool www] child 79 said into stderr: "NOTICE: PHP message: PHP Deprecated:  Use of "static" in callables is deprecated in /opt/sistemas/portalfornecedor/lib/predis-1.1/src/Command/Processor/KeyPrefixProcessor.php on line 200"
+[20-Apr-2026 15:06:10] WARNING: [pool www] child 79 said into stderr: "NOTICE: PHP message: PHP Warning:  Constant CSSJSV already defined in /opt/sistemas/portalfornecedor/core/templates/TemplateV2.php on line 31"
+[20-Apr-2026 15:06:10] WARNING: [pool www] child 79 said into stderr: "NOTICE: PHP message: PHP Deprecated:  Use of "static" in callables is deprecated in /opt/sistemas/portalfornecedor/lib/predis-1.1/src/Command/Processor/KeyPrefixProcessor.php on line 200"
+[20-Apr-2026 15:06:10] WARNING: [pool www] child 79 said into stderr: "NOTICE: PHP message: PHP Deprecated:  Use of "static" in callables is deprecated in /opt/sistemas/portalfornecedor/lib/predis-1.1/src/Command/Processor/KeyPrefixProcessor.php on line 200"
+[20-Apr-2026 16:12:53] WARNING: [pool www] child 80 said into stderr: "NOTICE: PHP message: Xdebug: [Log Files] File '/tmp/xdebug.log' could not be opened."
+[20-Apr-2026 16:12:53] WARNING: [pool www] child 80 said into stderr: "NOTICE: PHP message: Xdebug: [Step Debug] Could not connect to debugging client. Tried: host.docker.internal:9003 (through xdebug.client_host/xdebug.client_port)."
+[20-Apr-2026 16:12:53] WARNING: [pool www] child 80 said into stderr: "NOTICE: PHP message: PHP Warning:  Undefined array key "app" in /opt/sistemas/portalfornecedor/core/Sistema.php on line 82"
+[20-Apr-2026 16:12:53] WARNING: [pool www] child 80 said into stderr: "NOTICE: PHP message: PHP Warning:  Undefined array key "app" in /opt/sistemas/portalfornecedor/core/Sistema.php on line 85"
+[20-Apr-2026 16:12:53] WARNING: [pool www] child 80 said into stderr: "NOTICE: PHP message: PHP Warning:  Undefined array key "mostrar_ambiente" in /opt/sistemas/portalfornecedor/core/Sistema.php on line 89"
+[20-Apr-2026 16:12:53] WARNING: [pool www] child 80 said into stderr: "NOTICE: PHP message: PHP Fatal error:  Cannot redeclare bd\SQLServer::conecta() in /opt/sistemas/portalfornecedor/core/bd/SQLServer.php on line 104"
+[20-Apr-2026 16:13:00] WARNING: [pool www] child 80 said into stderr: "NOTICE: PHP message: Xdebug: [Log Files] File '/tmp/xdebug.log' could not be opened."
+[20-Apr-2026 16:13:00] WARNING: [pool www] child 80 said into stderr: "NOTICE: PHP message: Xdebug: [Step Debug] Could not connect to debugging client. Tried: host.docker.internal:9003 (through xdebug.client_host/xdebug.client_port)."
+[20-Apr-2026 16:13:00] WARNING: [pool www] child 80 said into stderr: "NOTICE: PHP message: PHP Warning:  Undefined array key "app" in /opt/sistemas/portalfornecedor/core/Sistema.php on line 82"
+[20-Apr-2026 16:13:00] WARNING: [pool www] child 80 said into stderr: "NOTICE: PHP message: PHP Warning:  Undefined array key "app" in /opt/sistemas/portalfornecedor/core/Sistema.php on line 85"
+[20-Apr-2026 16:13:00] WARNING: [pool www] child 80 said into stderr: "NOTICE: PHP message: PHP Warning:  Undefined array key "mostrar_ambiente" in /opt/sistemas/portalfornecedor/core/Sistema.php on line 89"
+[20-Apr-2026 16:13:00] WARNING: [pool www] child 80 said into stderr: "NOTICE: PHP message: PHP Fatal error:  Cannot redeclare bd\SQLServer::conecta() in /opt/sistemas/portalfornecedor/core/bd/SQLServer.php on line 104"
+[20-Apr-2026 16:13:58] WARNING: [pool www] child 81 said into stderr: "NOTICE: PHP message: Xdebug: [Log Files] File '/tmp/xdebug.log' could not be opened."
+[20-Apr-2026 16:13:58] WARNING: [pool www] child 81 said into stderr: "NOTICE: PHP message: Xdebug: [Step Debug] Could not connect to debugging client. Tried: host.docker.internal:9003 (through xdebug.client_host/xdebug.client_port)."
+[20-Apr-2026 16:13:58] WARNING: [pool www] child 81 said into stderr: "NOTICE: PHP message: PHP Warning:  Undefined array key "app" in /opt/sistemas/portalfornecedor/core/Sistema.php on line 82"
+[20-Apr-2026 16:13:58] WARNING: [pool www] child 81 said into stderr: "NOTICE: PHP message: PHP Warning:  Undefined array key "app" in /opt/sistemas/portalfornecedor/core/Sistema.php on line 85"
+[20-Apr-2026 16:13:58] WARNING: [pool www] child 81 said into stderr: "NOTICE: PHP message: PHP Warning:  Undefined array key "mostrar_ambiente" in /opt/sistemas/portalfornecedor/core/Sistema.php on line 89"
+[20-Apr-2026 16:13:58] WARNING: [pool www] child 81 said into stderr: "NOTICE: PHP message: PHP Warning:  Constant APP already defined in /opt/sistemas/portalfornecedor/inicia.php on line 10"
+[20-Apr-2026 16:13:58] WARNING: [pool www] child 81 said into stderr: "NOTICE: PHP message: PHP Warning:  Constant CSSJSV already defined in /opt/sistemas/portalfornecedor/core/templates/TemplateV2.php on line 31"
+[20-Apr-2026 16:13:58] WARNING: [pool www] child 81 said into stderr: "NOTICE: PHP message: PHP Deprecated:  Return type of Predis\Client::getIterator() should either be compatible with IteratorAggregate::getIterator(): Traversable, or the #[\ReturnTypeWillChange] attribute should be used to temporarily suppress the notice in /opt/sistemas/portalfornecedor/lib/predis-1.1/src/Client.php on line 532"
+[20-Apr-2026 16:13:58] WARNING: [pool www] child 81 said into stderr: "NOTICE: PHP message: PHP Deprecated:  Use of "static" in callables is deprecated in /opt/sistemas/portalfornecedor/lib/predis-1.1/src/Command/Processor/KeyPrefixProcessor.php on line 200"
+[20-Apr-2026 16:13:58] WARNING: [pool www] child 81 said into stderr: "NOTICE: PHP message: PHP Deprecated:  Use of "static" in callables is deprecated in /opt/sistemas/portalfornecedor/lib/predis-1.1/src/Command/Processor/KeyPrefixProcessor.php on line 200"
+[20-Apr-2026 17:30:56] WARNING: [pool www] child 82 said into stderr: "NOTICE: PHP message: Xdebug: [Log Files] File '/tmp/xdebug.log' could not be opened."
+[20-Apr-2026 17:30:56] WARNING: [pool www] child 82 said into stderr: "NOTICE: PHP message: Xdebug: [Step Debug] Could not connect to debugging client. Tried: host.docker.internal:9003 (through xdebug.client_host/xdebug.client_port)."
+[20-Apr-2026 17:30:56] WARNING: [pool www] child 82 said into stderr: "NOTICE: PHP message: PHP Warning:  Undefined array key "app" in /opt/sistemas/portalfornecedor/core/Sistema.php on line 82"
+[20-Apr-2026 17:30:56] WARNING: [pool www] child 82 said into stderr: "NOTICE: PHP message: PHP Warning:  Undefined array key "app" in /opt/sistemas/portalfornecedor/core/Sistema.php on line 85"
+[20-Apr-2026 17:30:56] WARNING: [pool www] child 82 said into stderr: "NOTICE: PHP message: PHP Warning:  Undefined array key "mostrar_ambiente" in /opt/sistemas/portalfornecedor/core/Sistema.php on line 89"
+[20-Apr-2026 17:30:56] WARNING: [pool www] child 82 said into stderr: "NOTICE: PHP message: PHP Fatal error:  Cannot redeclare bd\SQLServer::conexao() in /opt/sistemas/portalfornecedor/core/bd/SQLServer.php on line 72"
+    ---
+
+    User Story gerada:
+
+  user_prompt: "{bug_report}"
+
+  # Metadados
+  version: "v1"
+  created_at: "2025-01-15"
+  tags: ["bug-analysis", "user-story", "product-management"]
