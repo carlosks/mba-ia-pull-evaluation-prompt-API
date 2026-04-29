@@ -1,9 +1,9 @@
 from fastapi import FastAPI
-from app.schemas import UserCreate
-from app.service import create_user
+from app.schemas import UsuarioCreate, Usuario
+from app.service import criar_usuario
 
 app = FastAPI()
 
-@app.post("/users/", response_model=UserCreate)
-async def register_user(user: UserCreate):
-    return create_user(user)
+@app.post("/usuarios", response_model=Usuario)
+def criar(usuario: UsuarioCreate):
+    return criar_usuario(usuario)
