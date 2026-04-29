@@ -1,10 +1,13 @@
-from fastapi import HTTPException
-from app.schemas import UserCreate
+usuarios = []
+_counter = 1
 
-users_db = []
-
-def create_user(user: UserCreate):
-    if any(u.email == user.email for u in users_db):
-        raise HTTPException(status_code=400, detail="Email already registered")
-    users_db.append(user)
-    return user
+def criar_usuario(data):
+    global _counter
+    usuario = {
+        "id": _counter,
+        "nome": data.nome,
+        "email": data.email
+    }
+    usuarios.append(usuario)
+    _counter += 1
+    return usuario
