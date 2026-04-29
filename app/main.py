@@ -1,22 +1,10 @@
-from fastapi import FastAPI, HTTPException
-from app.schemas import UsuarioCreate, Usuario
-from app.service import criar_usuario
+from pydantic import BaseModel, EmailStr
 
-app = FastAPI(
-    title="API de Usuários",
-    description="API gerada automaticamente via pipeline de IA",
-    version="1.0.0"
-)
+class UsuarioCreate(BaseModel):
+    nome: str
+    email: EmailStr
 
-
-@app.get("/")
-def health_check():
-    return {"status": "ok"}
-
-
-@app.post("/usuarios", response_model=Usuario)
-def criar(usuario: UsuarioCreate):
-    try:
-        return criar_usuario(usuario)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+class Usuario(BaseModel):
+    id: int
+    nome: str
+    email: EmailStr
