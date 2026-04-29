@@ -6,3 +6,4 @@ python-dotenv
 langchain
 openai
 jinja2
+pydantic[email]
