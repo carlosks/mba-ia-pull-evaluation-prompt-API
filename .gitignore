@@ -4,5 +4,5 @@ __pycache__/
 .env
 generated/
 project.zip
-*.log
 app.db
+.DS_Store

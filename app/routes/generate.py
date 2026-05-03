@@ -1,12 +1,17 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 import os
 import shutil
 import zipfile
 
-# 🔥 IMPORT DO PIPELINE REAL
+# 🔥 PIPELINE IA
 from src.pipeline import gerar_user_story, gerar_projeto_completo
+
+# 🔥 BANCO (SaaS)
+from app import models
+from app.deps import get_db
 
 router = APIRouter()
 
@@ -18,17 +23,18 @@ class BugRequest(BaseModel):
 
 
 # =========================
-# GERAR PROJETO (PIPELINE REAL)
+# GERAR PROJETO (IA + BANCO)
 # =========================
 @router.post("/generate-project")
-def generate_project(data: BugRequest):
+def generate_project(data: BugRequest, db: Session = Depends(get_db)):
 
     bug = data.bug
 
-    # 🔥 ETAPA 1 — GERAR USER STORY
+    # =========================
+    # 1️⃣ GERAR USER STORY
+    # =========================
     user_story, acceptance_criteria, _ = gerar_user_story(bug)
 
-    # fallback se falhar
     if not user_story:
         user_story = f"Como usuário, quero corrigir: {bug}"
 
@@ -39,20 +45,23 @@ def generate_project(data: BugRequest):
             "Resposta deve ser clara"
         ]
 
-    # 🔥 ETAPA 2 — GERAR PROJETO COMPLETO
+    # =========================
+    # 2️⃣ GERAR PROJETO
+    # =========================
     resultado = gerar_projeto_completo(user_story)
 
     files = resultado.get("files", {})
 
+    # =========================
+    # 3️⃣ SALVAR EM DISCO
+    # =========================
     base_path = "generated"
 
-    # 🔥 LIMPA PROJETO ANTERIOR
     if os.path.exists(base_path):
         shutil.rmtree(base_path)
 
     os.makedirs(base_path, exist_ok=True)
 
-    # 🔥 SALVA ARQUIVOS GERADOS
     for path, content in files.items():
         full_path = os.path.join(base_path, path)
 
@@ -64,6 +73,27 @@ def generate_project(data: BugRequest):
         except Exception as e:
             print(f"Erro ao salvar {path}: {e}")
 
+    # =========================
+    # 4️⃣ SALVAR NO BANCO (SaaS)
+    # =========================
+    try:
+        project = models.Project(
+            bug=bug,
+            user_story=user_story,
+            code=str(files),
+            owner_id=1  # depois vira usuário logado
+        )
+
+        db.add(project)
+        db.commit()
+        db.refresh(project)
+
+    except Exception as e:
+        print(f"Erro ao salvar no banco: {e}")
+
+    # =========================
+    # 5️⃣ RESPOSTA
+    # =========================
     return {
         "user_story": user_story,
         "acceptance_criteria": acceptance_criteria,
@@ -72,7 +102,7 @@ def generate_project(data: BugRequest):
 
 
 # =========================
-# LISTAR ARQUIVOS
+# LISTAR ARQUIVOS (UI)
 # =========================
 @router.get("/get-project-files")
 def get_project_files():
@@ -106,11 +136,9 @@ def download_project():
     base_path = "generated"
     zip_path = "project.zip"
 
-    # remove zip antigo
     if os.path.exists(zip_path):
         os.remove(zip_path)
 
-    # cria zip
     with zipfile.ZipFile(zip_path, "w") as zipf:
         for root, _, files in os.walk(base_path):
             for file in files:

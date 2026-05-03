@@ -5,6 +5,10 @@ from fastapi.responses import FileResponse
 # IMPORT DAS ROTAS
 from app.routes.generate import router as generate_router
 
+from app.database import Base, engine
+
+Base.metadata.create_all(bind=engine)
+
 # =========================
 # APP
 # =========================
