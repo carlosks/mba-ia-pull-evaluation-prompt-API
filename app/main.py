@@ -7,6 +7,10 @@ from app.routes.generate import router as generate_router
 from app.routes.auth import router as auth_router
 from app.routes.users import router as users_router
 
+from app.routes.projects import router as projects_router
+app.include_router(projects_router)
+
+
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(

@@ -1,8 +1,8 @@
 venv/
+.env
 __pycache__/
 *.pyc
-.env
-generated/
-project.zip
-app.db
 .DS_Store
+node_modules/
+dist/
+build/
