@@ -1,47 +1,58 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from fastapi.security import OAuth2PasswordRequestForm
+from passlib.context import CryptContext
 
+from app.database import SessionLocal
 from app import models
-from app.deps import get_db
 from app.schemas.auth import UserCreate, UserOut, Token
-from app.security import hash_password, verify_password, create_access_token
-
-router = APIRouter(prefix="/auth", tags=["Auth"])
+from app.security import create_access_token
 
 
-# =========================
+router = APIRouter()
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+def hash_password(password: str):
+    return pwd_context.hash(password[:72])
+
+
+def verify_password(plain: str, hashed: str):
+    return pwd_context.verify(plain[:72], hashed)
+
+
 # REGISTER
-# =========================
 @router.post("/register", response_model=UserOut)
-def register_user(data: UserCreate, db: Session = Depends(get_db)):
-    existing_user = db.query(models.User).filter(
-        models.User.email == data.email
-    ).first()
+def register(data: UserCreate, db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.email == data.email).first()
 
-    if existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="E-mail já cadastrado"
-        )
+    if user:
+        raise HTTPException(status_code=400, detail="Usuário já existe")
 
-    user = models.User(
+    new_user = models.User(
         email=data.email,
         hashed_password=hash_password(data.password)
     )
 
-    db.add(user)
+    db.add(new_user)
     db.commit()
-    db.refresh(user)
+    db.refresh(new_user)
 
-    return user
+    return new_user
 
 
-# =========================
-# LOGIN (CORRIGIDO PARA SWAGGER)
-# =========================
+# LOGIN
 @router.post("/login", response_model=Token)
-def login_user(
+def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db)
 ):
@@ -50,20 +61,14 @@ def login_user(
     ).first()
 
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Usuário não encontrado"
-        )
+        raise HTTPException(status_code=401, detail="Usuário não encontrado")
 
     if not verify_password(form_data.password, user.hashed_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Senha inválida"
-        )
+        raise HTTPException(status_code=401, detail="Senha inválida")
 
-    access_token = create_access_token(data={"sub": user.email})
+    token = create_access_token({"sub": user.email})
 
     return {
-        "access_token": access_token,
+        "access_token": token,
         "token_type": "bearer"
     }
