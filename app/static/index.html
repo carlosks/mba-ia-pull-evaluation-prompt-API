@@ -1,49 +1,19 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>AI Diff Viewer</title>
-
+    <title>Bug → User Story</title>
     <style>
-        body {
-            font-family: Arial;
-            margin: 40px;
-            background: #0d1117;
-            color: #c9d1d9;
-        }
-
-        textarea {
-            width: 100%;
-            height: 120px;
-            background: #161b22;
-            color: white;
-            border: 1px solid #30363d;
-            padding: 10px;
-        }
-
-        button {
-            margin-top: 10px;
-            padding: 10px 20px;
-            background: #238636;
-            border: none;
-            color: white;
-            cursor: pointer;
-        }
-
-        .box {
-            margin-top: 20px;
-            padding: 15px;
-            border: 1px solid #30363d;
-            background: #161b22;
-        }
-
-        .add { background: #033a16; color: #aff5b4; }
-        .remove { background: #3f1517; color: #ffdcd7; }
+        body { font-family: Arial; background:#0d1117; color:#c9d1d9; margin:40px; }
+        textarea { width:100%; height:120px; background:#161b22; color:white; padding:10px; }
+        button { padding:10px; background:#238636; color:white; border:none; margin-top:10px; }
+        .box { margin-top:20px; padding:15px; background:#161b22; border:1px solid #30363d; }
+        .add { background:#033a16; color:#aff5b4; }
+        .remove { background:#3f1517; color:#ffdcd7; }
     </style>
 </head>
-
 <body>
 
-<h2>🚀 Bug → User Story (AI Diff)</h2>
+<h2>🚀 Bug → User Story</h2>
 
 <textarea id="bug">Ao clicar no botão salvar, o sistema não grava os dados</textarea>
 <br>
@@ -53,78 +23,61 @@
 <div id="story" class="box"></div>
 <div id="diff" class="box"></div>
 
-<!-- 🔥 SCRIPT CORRETO -->
 <script>
 async function run() {
-
     const bug = document.getElementById("bug").value;
 
     document.getElementById("status").innerHTML = "⏳ Processando...";
 
-    try {
+    const res = await fetch("/api/generate-project", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({description: bug})
+    });
 
-        const res = await fetch("/api/generate-project", {
-            method: "POST",
-            headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({ description: bug })
+    const data = await res.json();
+
+    document.getElementById("status").innerHTML = `
+        Score: ${data.evaluation.score}<br>
+        Status: ${data.evaluation.status}<br>
+        ${data.evaluation.expansion.detected ? "🚀 " + data.evaluation.expansion.label : ""}
+    `;
+
+    let storyHtml = "";
+
+    if (data.auto_improved && data.improvement) {
+        storyHtml = `
+        <h3>🟥 Antes</h3>
+        <div>${data.improvement.original}</div>
+        <h3>🟩 Depois</h3>
+        <div>${data.user_story}</div>
+        `;
+    } else {
+        storyHtml = `<div>${data.user_story}</div>`;
+    }
+
+    document.getElementById("story").innerHTML = storyHtml;
+
+    let html = "";
+
+    if (data.improvement) {
+        data.improvement.diff.forEach(line => {
+            if (line.startsWith("+")) html += `<div class="add">${line}</div>`;
+            else if (line.startsWith("-")) html += `<div class="remove">${line}</div>`;
+            else html += `<div>${line}</div>`;
         });
 
-        const data = await res.json();
-
-        // STATUS
-        document.getElementById("status").innerHTML = `
-            <b>Score:</b> ${data.evaluation.score}<br>
-            <b>Status:</b> ${data.evaluation.status}<br>
-            <b>Auto Improved:</b> ${data.auto_improved}
-        `;
-
-        // STORY
-        let storyHtml = "";
-
-        if (data.auto_improved && data.improvement) {
-            storyHtml = `
-                <h3>🟥 Antes</h3>
-                <div>${data.improvement.original || "não disponível"}</div>
-
-                <h3>🟩 Depois</h3>
-                <div>${data.user_story}</div>
-            `;
-        } else {
-            storyHtml = `
-                <h3>📄 User Story</h3>
-                <div>${data.user_story}</div>
-            `;
-        }
-
-        document.getElementById("story").innerHTML = storyHtml;
-
-        // DIFF
-        let html = "";
-
-        if (data.improvement && data.improvement.diff) {
-            html += "<h3>🔍 Alterações</h3>";
-
-            data.improvement.diff.forEach(line => {
-                if (line.startsWith("+")) {
-                    html += `<div class="add">${line}</div>`;
-                } else if (line.startsWith("-")) {
-                    html += `<div class="remove">${line}</div>`;
-                } else {
-                    html += `<div>${line}</div>`;
-                }
+        if (data.improvement.new_scenarios.length > 0) {
+            html += "<br><b>🚀 Cenários adicionados:</b><br>";
+            data.improvement.new_scenarios.forEach(s => {
+                html += `<div class="add">+ ${s}</div>`;
             });
-
-            html += `<br><b>🧠 Explicação:</b><br>${data.improvement.explanation}`;
-        } else {
-            html = "Nenhuma melhoria aplicada.";
         }
 
-        document.getElementById("diff").innerHTML = html;
-
-    } catch (err) {
-        console.error(err);
-        document.getElementById("status").innerHTML = "❌ Erro ao chamar API";
+        html += `<br><b>🧠 Explicação:</b><br>${data.improvement.explanation}`;
     }
+
+    document.getElementById("diff").innerHTML = html;
 }
 </script>
 

@@ -1,11 +1,10 @@
 import re
-import numpy as np
 import unicodedata
 from sklearn.metrics.pairwise import cosine_similarity
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 
-# 🔤 NORMALIZAÇÃO (resolve acentos)
+# 🔤 NORMALIZAÇÃO
 def normalize_text(text: str) -> str:
     text = text.lower()
     text = unicodedata.normalize('NFD', text)
@@ -17,15 +16,14 @@ def normalize_text(text: str) -> str:
 # 🔎 TOKENIZAÇÃO
 def tokenize(text: str):
     stopwords = {
-        "a", "o", "e", "de", "do", "da", "para", "que", "com",
-        "um", "uma", "no", "na", "nos", "nas"
+        "a","o","e","de","do","da","para","que","com",
+        "um","uma","no","na","nos","nas"
     }
-
     words = normalize_text(text).split()
     return {w for w in words if w not in stopwords and len(w) > 2}
 
 
-# 📊 F1 SIMPLIFICADO (proxy)
+# 📊 F1 PROXY
 def f1_proxy(bug: str, story: str):
     bug_terms = tokenize(bug)
     story_terms = tokenize(story)
@@ -46,16 +44,20 @@ def f1_proxy(bug: str, story: str):
 
 # 🧠 SIMILARIDADE SEMÂNTICA
 def semantic_similarity(bug: str, story: str):
-    embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+    embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
 
     v1 = embeddings.embed_query(bug)
     v2 = embeddings.embed_query(story)
 
     sim = cosine_similarity([v1], [v2])[0][0]
-    return round(float(sim), 2)
+
+    length_ratio = min(len(story) / max(len(bug), 1), 5)
+    sim_adjusted = sim * (1 + (length_ratio * 0.05))
+
+    return round(min(sim_adjusted, 1.0), 2)
 
 
-# 🧱 VALIDAÇÃO DE ESTRUTURA
+# 🧱 ESTRUTURA
 def structure_score(story: str):
     normalized = normalize_text(story)
 
@@ -71,18 +73,15 @@ def structure_score(story: str):
     }
 
     score = sum(checks.values()) / len(checks)
-
     return round(score, 2), checks
 
 
-# 🤖 AVALIAÇÃO COM LLM (judge)
+# 🤖 LLM JUDGE
 def llm_judge(bug: str, story: str):
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
     prompt = f"""
-Você é um avaliador rigoroso de user stories.
-
-Avalie a qualidade da user story baseada no bug.
+Avalie a user story abaixo.
 
 BUG:
 {bug}
@@ -90,13 +89,14 @@ BUG:
 USER STORY:
 {story}
 
-Retorne JSON válido:
-{{
-  "clarity": 0.0,
-  "precision": 0.0,
-  "usefulness": 0.0,
-  "criteria": 0.0
-}}
+Avalie de 0 a 1:
+- clareza
+- precisão
+- utilidade
+- critérios
+
+Retorne JSON:
+{{"clarity":0.0,"precision":0.0,"usefulness":0.0,"criteria":0.0}}
 """
 
     res = llm.invoke(prompt)
@@ -106,14 +106,86 @@ Retorne JSON válido:
         return json.loads(res.content)
     except:
         return {
-            "clarity": 0.7,
-            "precision": 0.7,
-            "usefulness": 0.7,
-            "criteria": 0.7
+            "clarity":0.7,
+            "precision":0.7,
+            "usefulness":0.7,
+            "criteria":0.7
         }
 
 
-# 🎯 AVALIAÇÃO FINAL (calibrada para SaaS)
+# 🔥 EXTRAÇÃO ROBUSTA DE CENÁRIOS (FUNCIONA MESMO EM UMA LINHA)
+def extract_scenarios(text: str):
+    text = text.lower()
+
+    # quebra artificial
+    text = text.replace(" dado", "\nDado")
+
+    lines = text.split("\n")
+    raw_scenarios = []
+    current = ""
+
+    for line in lines:
+        line = line.strip()
+
+        if line.startswith("dado"):
+            if current:
+                raw_scenarios.append(current)
+            current = line
+
+        elif line.startswith("quando") or line.startswith("entao"):
+            current += " " + line
+
+    if current:
+        raw_scenarios.append(current)
+
+    # 🔥 NORMALIZA PARA COMPARAÇÃO
+    def normalize(s):
+        s = unicodedata.normalize('NFD', s)
+        s = ''.join(c for c in s if unicodedata.category(c) != 'Mn')
+        s = re.sub(r'[^a-z0-9 ]', '', s)
+        return s.strip()
+
+    unique = []
+    seen = []
+
+    for s in raw_scenarios:
+        ns = normalize(s)
+
+        # 🔥 compara similaridade simples (containment)
+        if not any(ns in x or x in ns for x in seen):
+            seen.append(ns)
+            unique.append(s)
+
+    return unique
+
+
+# 🔍 NOVOS CENÁRIOS
+def detect_new_scenarios(old_story: str, new_story: str):
+    old = set(extract_scenarios(old_story))
+    new = set(extract_scenarios(new_story))
+    return list(new - old)
+
+
+# 🚀 DETECÇÃO DE EXPANSÃO
+def detect_expansion(bug: str, story: str):
+    length_ratio = len(story) / max(len(bug), 1)
+    scenarios = len(extract_scenarios(story))
+
+    expanded = length_ratio > 2 or scenarios >= 2
+
+    bonus = 0.0
+    if expanded:
+        bonus = min(0.1, (length_ratio * 0.02) + (scenarios * 0.01))
+
+    return {
+        "detected": expanded,
+        "scenarios_added": scenarios,
+        "bonus": round(bonus, 2),
+        "label": f"Story enriquecida (+{scenarios} cenários)" if expanded else None
+    }
+
+
+# 🎯 AVALIAÇÃO FINAL
 def evaluate_all(bug: str, story: str):
     f1 = f1_proxy(bug, story)
     sem = semantic_similarity(bug, story)
@@ -122,16 +194,25 @@ def evaluate_all(bug: str, story: str):
 
     judge_score = round(sum(judge.values()) / len(judge), 2)
 
-    # 🔥 PESOS AJUSTADOS (importante)
-    final = round(
-        f1 * 0.05 +        # baixo peso
-        sem * 0.35 +       # alto peso
-        struct * 0.25 +    # médio
-        judge_score * 0.35, # alto
-        2
+    expansion = detect_expansion(bug, story)
+
+    # peso adaptativo
+    f1_weight = 0.05 if len(story) < 2 * len(bug) else 0.01
+
+    base_score = (
+        f1 * f1_weight +
+        sem * 0.35 +
+        struct * 0.25 +
+        judge_score * 0.35
     )
 
-    # 📊 CLASSIFICAÇÃO
+    # bônus estrutura perfeita
+    if struct == 1.0:
+        base_score += 0.05
+
+    # bônus expansão
+    final = round(min(base_score + expansion["bonus"], 1.0), 2)
+
     if final >= 0.9:
         status = "approved"
     elif final >= 0.75:
@@ -148,5 +229,6 @@ def evaluate_all(bug: str, story: str):
             "structure": struct,
             "judge": judge_score
         },
-        "checks": checks
+        "checks": checks,
+        "expansion": expansion
     }
