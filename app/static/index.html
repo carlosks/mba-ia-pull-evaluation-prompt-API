@@ -1,175 +1,131 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>🚀 Bug → API Generator</title>
+    <title>AI Diff Viewer</title>
 
-  <style>
-    body {
-      font-family: Arial;
-      max-width: 1000px;
-      margin: auto;
-    }
+    <style>
+        body {
+            font-family: Arial;
+            margin: 40px;
+            background: #0d1117;
+            color: #c9d1d9;
+        }
 
-    textarea {
-      width: 100%;
-      height: 120px;
-    }
+        textarea {
+            width: 100%;
+            height: 120px;
+            background: #161b22;
+            color: white;
+            border: 1px solid #30363d;
+            padding: 10px;
+        }
 
-    button {
-      padding: 10px;
-      margin-top: 10px;
-      cursor: pointer;
-    }
+        button {
+            margin-top: 10px;
+            padding: 10px 20px;
+            background: #238636;
+            border: none;
+            color: white;
+            cursor: pointer;
+        }
 
-    pre {
-      background: #111;
-      color: #0f0;
-      padding: 10px;
-      overflow: auto;
-      max-height: 400px;
-    }
+        .box {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #30363d;
+            background: #161b22;
+        }
 
-    .container {
-      display: flex;
-      gap: 20px;
-    }
-
-    .files {
-      width: 30%;
-      border-right: 1px solid #ccc;
-    }
-
-    .code {
-      width: 70%;
-    }
-
-    li {
-      cursor: pointer;
-      margin-bottom: 5px;
-    }
-
-    li:hover {
-      color: blue;
-    }
-  </style>
+        .add { background: #033a16; color: #aff5b4; }
+        .remove { background: #3f1517; color: #ffdcd7; }
+    </style>
 </head>
 
 <body>
 
-<h2>🚀 Gerador de API (SaaS)</h2>
+<h2>🚀 Bug → User Story (AI Diff)</h2>
 
-<label>Descreva o bug:</label>
-<textarea id="bug"></textarea>
+<textarea id="bug">Ao clicar no botão salvar, o sistema não grava os dados</textarea>
+<br>
+<button onclick="run()">Gerar</button>
 
-<button onclick="gerar()">Gerar Projeto</button>
+<div id="status" class="box"></div>
+<div id="story" class="box"></div>
+<div id="diff" class="box"></div>
 
-<h3>Status:</h3>
-<div id="status"></div>
-
-<h3>User Story:</h3>
-<pre id="story"></pre>
-
-<h3>Critérios de Aceitação:</h3>
-<ul id="criteria"></ul>
-
-<h3>Projeto:</h3>
-
-<div class="container">
-  
-  <!-- LISTA DE ARQUIVOS -->
-  <div class="files">
-    <ul id="fileList"></ul>
-  </div>
-
-  <!-- CÓDIGO -->
-  <div class="code">
-    <pre id="codeView">Selecione um arquivo...</pre>
-  </div>
-
-</div>
-
-<h3>Download:</h3>
-<a id="download" href="#" target="_blank"></a>
-
+<!-- 🔥 SCRIPT CORRETO -->
 <script>
+async function run() {
 
-let arquivos = {};
-
-async function gerar() {
     const bug = document.getElementById("bug").value;
 
-    document.getElementById("status").innerText = "Gerando...";
-    document.getElementById("criteria").innerHTML = "";
-    document.getElementById("fileList").innerHTML = "";
-    document.getElementById("codeView").innerText = "";
+    document.getElementById("status").innerHTML = "⏳ Processando...";
 
     try {
-        // 🔹 GERAR PROJETO
-        const res = await fetch("/generate-project", {
+
+        const res = await fetch("/api/generate-project", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ bug })
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ description: bug })
         });
 
         const data = await res.json();
-        console.log("DATA:", data);
 
-        document.getElementById("status").innerText = "Pronto ✔";
+        // STATUS
+        document.getElementById("status").innerHTML = `
+            <b>Score:</b> ${data.evaluation.score}<br>
+            <b>Status:</b> ${data.evaluation.status}<br>
+            <b>Auto Improved:</b> ${data.auto_improved}
+        `;
 
-        // 🔹 USER STORY
-        document.getElementById("story").innerText = data.user_story || "Não gerado";
+        // STORY
+        let storyHtml = "";
 
-        // 🔹 CRITÉRIOS
-        if (data.acceptance_criteria) {
-            data.acceptance_criteria.forEach(item => {
-                const li = document.createElement("li");
-                li.innerText = item;
-                document.getElementById("criteria").appendChild(li);
-            });
+        if (data.auto_improved && data.improvement) {
+            storyHtml = `
+                <h3>🟥 Antes</h3>
+                <div>${data.improvement.original || "não disponível"}</div>
+
+                <h3>🟩 Depois</h3>
+                <div>${data.user_story}</div>
+            `;
+        } else {
+            storyHtml = `
+                <h3>📄 User Story</h3>
+                <div>${data.user_story}</div>
+            `;
         }
 
-        // 🔹 BUSCAR ARQUIVOS
-        const filesRes = await fetch("/get-project-files");
-        const filesData = await filesRes.json();
+        document.getElementById("story").innerHTML = storyHtml;
 
-        console.log("FILES:", filesData);
+        // DIFF
+        let html = "";
 
-        arquivos = filesData.files || {};
+        if (data.improvement && data.improvement.diff) {
+            html += "<h3>🔍 Alterações</h3>";
 
-        renderFiles();
+            data.improvement.diff.forEach(line => {
+                if (line.startsWith("+")) {
+                    html += `<div class="add">${line}</div>`;
+                } else if (line.startsWith("-")) {
+                    html += `<div class="remove">${line}</div>`;
+                } else {
+                    html += `<div>${line}</div>`;
+                }
+            });
 
-        // 🔹 DOWNLOAD
-        document.getElementById("download").href = "/download-project";
-        document.getElementById("download").innerText = "Baixar projeto";
+            html += `<br><b>🧠 Explicação:</b><br>${data.improvement.explanation}`;
+        } else {
+            html = "Nenhuma melhoria aplicada.";
+        }
+
+        document.getElementById("diff").innerHTML = html;
 
     } catch (err) {
-        console.error("ERRO:", err);
-        document.getElementById("status").innerText = "Erro ❌";
+        console.error(err);
+        document.getElementById("status").innerHTML = "❌ Erro ao chamar API";
     }
 }
-
-function renderFiles() {
-    const list = document.getElementById("fileList");
-
-    list.innerHTML = "";
-
-    if (!arquivos || Object.keys(arquivos).length === 0) {
-        list.innerHTML = "<li>Nenhum arquivo encontrado</li>";
-        return;
-    }
-
-    Object.keys(arquivos).forEach(nome => {
-        const li = document.createElement("li");
-        li.innerText = nome;
-
-        li.onclick = () => {
-            document.getElementById("codeView").innerText = arquivos[nome];
-        };
-
-        list.appendChild(li);
-    });
-}
-
 </script>
 
 </body>
