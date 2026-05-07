@@ -1,43 +1,35 @@
-from dotenv import load_dotenv
-load_dotenv()
-
 from fastapi import FastAPI
-from fastapi.responses import FileResponse
+from fastapi.middleware.cors import CORSMiddleware
 
-from app.routes.auth import router as auth_router
+# 🔹 Importa o router de projects
 from app.routes.projects import router as projects_router
 
-from app.database import engine
-from app import models
-
-models.Base.metadata.create_all(bind=engine)
-
-
-# 🔥 CRIAR APP PRIMEIRO
 app = FastAPI(
-    title="Bug → User Story SaaS",
+    title="MBA IA - Prompt Evaluation API",
+    description="API para geração de User Stories a partir de Bugs",
     version="1.0.0"
 )
 
+# 🔹 CORS (útil para frontend futuro)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # em produção, restrinja isso
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-# 🔗 ROTAS
-app.include_router(auth_router, prefix="/auth", tags=["Auth"])
-app.include_router(projects_router, prefix="/projects", tags=["Projects"])
+# 🔥 REGISTRO DAS ROTAS (ESSENCIAL)
+app.include_router(projects_router)
 
 
-# ROOT
+# 🔹 Rota raiz (health check)
 @app.get("/")
 def root():
     return {"msg": "SaaS rodando 🚀"}
 
 
-# HEALTH
+# 🔹 Rota simples de teste
 @app.get("/health")
 def health():
     return {"status": "ok"}
-
-
-# UI
-@app.get("/ui")
-def ui():
-    return FileResponse("app/static/index.html")

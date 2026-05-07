@@ -1,154 +1,246 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import FileResponse
-from sqlalchemy.orm import Session
-import os
-import uuid
-import zipfile
+from pathlib import Path
+from typing import List, Optional
 
-from app import models
-from app.deps import get_db
-from app.security import get_current_user
-from app.schemas.project import ProjectOut, BugRequest
-from app.services.generator_service import generate_all
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
-router = APIRouter(tags=["Projects"])  # 🚨 sem prefix aqui
+from app.services.generator_service import generate_all, generate_solution_project
+from app.services.project_builder_service import (
+    build_project_response,
+    build_solution_project_response,
+)
 
 
-# =========================
-# GERAR PROJETO
-# =========================
-@router.post("/generate", response_model=ProjectOut)
-def generate_project(
-    request: BugRequest,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
-):
-    try:
-        # 🔥 gerar tudo (IA + evaluator)
-        result = generate_all(request.description)
-
-        # salvar no banco
-        project = models.Project(
-            bug=result["bug"],
-            user_story=result["user_story"],
-            code=result["api_code"],
-            score=str(result["evaluation"]["score"]),
-            status=result["evaluation"]["status"],
-            owner_id=current_user.id
-        )
-
-        db.add(project)
-        db.commit()
-        db.refresh(project)
-
-        return project
-
-    except Exception as e:
-        print("❌ ERRO NO GENERATE:", e)
-        raise HTTPException(
-            status_code=500,
-            detail=f"Erro ao gerar projeto: {str(e)}"
-        )
+router = APIRouter(prefix="/projects", tags=["Projects"])
 
 
-# =========================
-# LISTAR PROJETOS
-# =========================
-@router.get("/", response_model=list[ProjectOut])
-def list_my_projects(
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
-):
-    return db.query(models.Project).filter(
-        models.Project.owner_id == current_user.id
-    ).all()
+BASE_DIR = Path(__file__).resolve().parents[2]
+GENERATED_PROJECTS_DIR = BASE_DIR / "generated_projects"
 
 
-# =========================
-# DETALHAR PROJETO
-# =========================
-@router.get("/{project_id}", response_model=ProjectOut)
-def get_project(
-    project_id: int,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
-):
-    project = db.query(models.Project).filter(
-        models.Project.id == project_id,
-        models.Project.owner_id == current_user.id
-    ).first()
-
-    if not project:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Projeto não encontrado"
-        )
-
-    return project
+class ProjectGenerateRequest(BaseModel):
+    bug: str
 
 
-# =========================
-# DELETAR PROJETO
-# =========================
-@router.delete("/{project_id}")
-def delete_project(
-    project_id: int,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
-):
-    project = db.query(models.Project).filter(
-        models.Project.id == project_id,
-        models.Project.owner_id == current_user.id
-    ).first()
-
-    if not project:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Projeto não encontrado"
-        )
-
-    db.delete(project)
-    db.commit()
-
-    return {"message": "Projeto removido com sucesso"}
+class ProjectGenerateResponse(BaseModel):
+    user_story: str
+    acceptance_criteria: List[str]
 
 
-# =========================
-# DOWNLOAD ZIP DO PROJETO
-# =========================
-@router.get("/{project_id}/download")
-def download_project(
-    project_id: int,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
-):
-    project = db.query(models.Project).filter(
-        models.Project.id == project_id,
-        models.Project.owner_id == current_user.id
-    ).first()
+class ProjectGenerateFullResponse(BaseModel):
+    project_name: str
+    project_path: str
+    domain: Optional[str] = None
+    user_story: str
+    acceptance_criteria: List[str]
+    files: List[str]
+    endpoints: Optional[List[str]] = None
 
-    if not project:
+
+class ProjectGenerateSolutionResponse(BaseModel):
+    project_name: str
+    project_path: str
+    generation_mode: str
+    user_story: str
+    acceptance_criteria: List[str]
+    technical_analysis: str
+    solution_plan: List[str]
+    files: List[str]
+
+
+class GeneratedProjectSummary(BaseModel):
+    project_name: str
+    project_path: str
+    files: List[str]
+
+
+class GeneratedProjectsResponse(BaseModel):
+    projects: List[GeneratedProjectSummary]
+
+
+class GeneratedProjectFilesResponse(BaseModel):
+    project_name: str
+    files: List[str]
+
+
+class GeneratedProjectFileContentResponse(BaseModel):
+    project_name: str
+    filename: str
+    content: str
+    size_bytes: int
+
+
+def get_project_path(project_name: str) -> Path:
+    project_path = GENERATED_PROJECTS_DIR / project_name
+
+    if not project_path.exists() or not project_path.is_dir():
         raise HTTPException(
             status_code=404,
-            detail="Projeto não encontrado"
+            detail=f"Projeto gerado não encontrado: {project_name}",
         )
 
-    # pasta temporária
-    folder_name = f"generated/{uuid.uuid4()}"
-    os.makedirs(folder_name, exist_ok=True)
+    return project_path
 
-    # arquivo python
-    file_path = os.path.join(folder_name, "app.py")
-    with open(file_path, "w", encoding="utf-8") as f:
-        f.write(project.code)
 
-    # zip
-    zip_path = f"{folder_name}.zip"
-    with zipfile.ZipFile(zip_path, "w") as zipf:
-        zipf.write(file_path, arcname="app.py")
+def list_project_files(project_path: Path) -> List[str]:
+    return sorted([
+        item.name
+        for item in project_path.iterdir()
+        if item.is_file()
+    ])
 
-    return FileResponse(
-        zip_path,
-        media_type="application/zip",
-        filename="project.zip"
-    )
+
+@router.post("/generate", response_model=ProjectGenerateResponse)
+def generate_project(payload: ProjectGenerateRequest):
+    """
+    Gera apenas User Story e Critérios de Aceitação a partir de um bug.
+    """
+    try:
+        result = generate_all(payload.bug)
+
+        return {
+            "user_story": result.get("user_story", ""),
+            "acceptance_criteria": result.get("acceptance_criteria", []),
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao gerar User Story: {str(e)}",
+        )
+
+
+@router.post("/generate-full", response_model=ProjectGenerateFullResponse)
+def generate_full_project(payload: ProjectGenerateRequest):
+    """
+    Gera User Story, Critérios de Aceitação e cria uma estrutura de projeto
+    dentro da pasta generated_projects/.
+    """
+    try:
+        result = generate_all(payload.bug)
+
+        user_story = result.get("user_story", "")
+        acceptance_criteria = result.get("acceptance_criteria", [])
+
+        project_response = build_project_response(
+            bug=payload.bug,
+            user_story=user_story,
+            acceptance_criteria=acceptance_criteria,
+        )
+
+        return project_response
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao gerar projeto completo: {str(e)}",
+        )
+
+
+@router.post("/generate-solution", response_model=ProjectGenerateSolutionResponse)
+def generate_solution(payload: ProjectGenerateRequest):
+    """
+    Gera uma solução técnica com código usando OpenAI e grava os arquivos
+    dentro da pasta generated_projects/.
+    """
+    try:
+        result = generate_solution_project(payload.bug)
+
+        project_response = build_solution_project_response(
+            bug=payload.bug,
+            user_story=result.get("user_story", ""),
+            acceptance_criteria=result.get("acceptance_criteria", []),
+            technical_analysis=result.get("technical_analysis", ""),
+            solution_plan=result.get("solution_plan", []),
+            files=result.get("files", {}),
+        )
+
+        return project_response
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao gerar solução técnica: {str(e)}",
+        )
+
+
+@router.get("/generated", response_model=GeneratedProjectsResponse)
+def list_generated_projects():
+    """
+    Lista todos os projetos gerados dentro de generated_projects/.
+    """
+    if not GENERATED_PROJECTS_DIR.exists():
+        return {"projects": []}
+
+    projects = []
+
+    for item in sorted(GENERATED_PROJECTS_DIR.iterdir(), key=lambda p: p.name):
+        if item.is_dir():
+            projects.append({
+                "project_name": item.name,
+                "project_path": str(item),
+                "files": list_project_files(item),
+            })
+
+    return {"projects": projects}
+
+
+@router.get("/generated/{project_name}/files", response_model=GeneratedProjectFilesResponse)
+def list_generated_project_files(project_name: str):
+    """
+    Lista os arquivos de um projeto gerado específico.
+    """
+    project_path = get_project_path(project_name)
+
+    return {
+        "project_name": project_name,
+        "files": list_project_files(project_path),
+    }
+
+
+@router.get(
+    "/generated/{project_name}/files/{filename}",
+    response_model=GeneratedProjectFileContentResponse,
+)
+def read_generated_project_file(project_name: str, filename: str):
+    """
+    Lê o conteúdo de um arquivo gerado, como README.md, main.py ou metadata.json.
+    """
+    if "/" in filename or "\\" in filename:
+        raise HTTPException(
+            status_code=400,
+            detail="Nome de arquivo inválido.",
+        )
+
+    project_path = get_project_path(project_name)
+    file_path = project_path / filename
+
+    if not file_path.exists() or not file_path.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail=f"Arquivo não encontrado: {filename}",
+        )
+
+    allowed_extensions = {
+        ".md",
+        ".py",
+        ".txt",
+        ".json",
+        ".yml",
+        ".yaml",
+    }
+
+    if file_path.suffix.lower() not in allowed_extensions:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Tipo de arquivo não permitido para visualização: {file_path.suffix}",
+        )
+
+    content = file_path.read_text(encoding="utf-8")
+
+    return {
+        "project_name": project_name,
+        "filename": filename,
+        "content": content,
+        "size_bytes": file_path.stat().st_size,
+    }
