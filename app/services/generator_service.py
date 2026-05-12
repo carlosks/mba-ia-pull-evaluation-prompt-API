@@ -140,16 +140,35 @@ def clean_acceptance_line(text: str) -> str:
 
 
 def extract_json_from_text(text: str) -> Dict[str, Any]:
+    """
+    Extrai JSON da resposta do modelo.
+
+    Aceita:
+    - JSON puro
+    - JSON cercado por ```json
+    - JSON com algum texto antes/depois
+    - tenta corrigir barras invertidas inválidas, como C:\pasta
+    """
     if not text:
         raise ValueError("Resposta vazia da OpenAI.")
 
     cleaned = text.strip()
+
     cleaned = cleaned.replace("```json", "")
     cleaned = cleaned.replace("```", "")
     cleaned = cleaned.strip()
 
+    def try_load_json(value: str) -> Dict[str, Any]:
+        try:
+            return json.loads(value)
+        except json.JSONDecodeError:
+            # Corrige barras invertidas inválidas em JSON:
+            # Exemplo: C:\Prompts vira C:\\Prompts
+            repaired = re.sub(r'\\(?!["\\/bfnrtu])', r"\\\\", value)
+            return json.loads(repaired)
+
     try:
-        return json.loads(cleaned)
+        return try_load_json(cleaned)
     except json.JSONDecodeError:
         pass
 
@@ -161,7 +180,7 @@ def extract_json_from_text(text: str) -> Dict[str, Any]:
     json_text = match.group(0)
 
     try:
-        return json.loads(json_text)
+        return try_load_json(json_text)
     except json.JSONDecodeError as e:
         raise ValueError(f"JSON retornado pela OpenAI é inválido: {str(e)}")
 

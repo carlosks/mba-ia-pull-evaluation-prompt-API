@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
 from app.services.generator_service import generate_all, generate_solution_project
@@ -88,6 +89,118 @@ def list_project_files(project_path: Path) -> List[str]:
         for item in project_path.iterdir()
         if item.is_file()
     ])
+
+
+def validate_filename(filename: str) -> None:
+    if "/" in filename or "\\" in filename:
+        raise HTTPException(
+            status_code=400,
+            detail="Nome de arquivo inválido.",
+        )
+
+
+def read_allowed_file(project_name: str, filename: str) -> tuple[Path, str]:
+    validate_filename(filename)
+
+    project_path = get_project_path(project_name)
+    file_path = project_path / filename
+
+    if not file_path.exists() or not file_path.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail=f"Arquivo não encontrado: {filename}",
+        )
+
+    allowed_extensions = {
+        ".md",
+        ".py",
+        ".txt",
+        ".json",
+        ".yml",
+        ".yaml",
+    }
+
+    if file_path.suffix.lower() not in allowed_extensions:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Tipo de arquivo não permitido para visualização: {file_path.suffix}",
+        )
+
+    content = file_path.read_text(encoding="utf-8")
+
+    return file_path, content
+
+
+def markdown_to_word_text(content: str) -> str:
+    """
+    Converte Markdown simples em texto mais limpo para colar no Word.
+    """
+    if not content:
+        return ""
+
+    lines = content.splitlines()
+    clean_lines = []
+
+    for line in lines:
+        line = line.rstrip()
+
+        if line.startswith("# "):
+            clean_lines.append(line.replace("# ", "").upper())
+            clean_lines.append("")
+            continue
+
+        if line.startswith("## "):
+            clean_lines.append(line.replace("## ", "").upper())
+            clean_lines.append("")
+            continue
+
+        if line.startswith("### "):
+            clean_lines.append(line.replace("### ", "").upper())
+            clean_lines.append("")
+            continue
+
+        if line.startswith("- "):
+            clean_lines.append(f"• {line[2:]}")
+            continue
+
+        if line.startswith("```"):
+            continue
+
+        clean_lines.append(line)
+
+    text = "\n".join(clean_lines)
+
+    while "\n\n\n" in text:
+        text = text.replace("\n\n\n", "\n\n")
+
+    return text.strip()
+
+
+def build_word_text(project_name: str, filename: str, content: str) -> str:
+    title = filename.replace("_", " ").replace("-", " ")
+
+    if filename.lower().endswith(".md"):
+        body = markdown_to_word_text(content)
+    else:
+        body = content.strip()
+
+    lines = [
+        "DOCUMENTO GERADO PELA PROMPT EVALUATION API",
+        "",
+        f"Projeto: {project_name}",
+        f"Arquivo: {filename}",
+        "",
+        "-" * 70,
+        "",
+        body,
+        "",
+        "-" * 70,
+        "",
+        "Observação:",
+        "Texto formatado automaticamente para cópia e colagem no Microsoft Word.",
+    ]
+
+    return "\n".join(lines)
 
 
 @router.post("/generate", response_model=ProjectGenerateResponse)
@@ -206,37 +319,7 @@ def read_generated_project_file(project_name: str, filename: str):
     """
     Lê o conteúdo de um arquivo gerado, como README.md, main.py ou metadata.json.
     """
-    if "/" in filename or "\\" in filename:
-        raise HTTPException(
-            status_code=400,
-            detail="Nome de arquivo inválido.",
-        )
-
-    project_path = get_project_path(project_name)
-    file_path = project_path / filename
-
-    if not file_path.exists() or not file_path.is_file():
-        raise HTTPException(
-            status_code=404,
-            detail=f"Arquivo não encontrado: {filename}",
-        )
-
-    allowed_extensions = {
-        ".md",
-        ".py",
-        ".txt",
-        ".json",
-        ".yml",
-        ".yaml",
-    }
-
-    if file_path.suffix.lower() not in allowed_extensions:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Tipo de arquivo não permitido para visualização: {file_path.suffix}",
-        )
-
-    content = file_path.read_text(encoding="utf-8")
+    file_path, content = read_allowed_file(project_name, filename)
 
     return {
         "project_name": project_name,
@@ -244,3 +327,21 @@ def read_generated_project_file(project_name: str, filename: str):
         "content": content,
         "size_bytes": file_path.stat().st_size,
     }
+
+
+@router.get(
+    "/generated/{project_name}/files/{filename}/word-text",
+    response_class=PlainTextResponse,
+)
+def read_generated_project_file_as_word_text(project_name: str, filename: str):
+    """
+    Retorna o conteúdo de um arquivo gerado em texto limpo,
+    pronto para copiar e colar no Microsoft Word.
+    """
+    _, content = read_allowed_file(project_name, filename)
+
+    return build_word_text(
+        project_name=project_name,
+        filename=filename,
+        content=content,
+    )
