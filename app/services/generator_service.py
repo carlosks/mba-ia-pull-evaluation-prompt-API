@@ -7,7 +7,7 @@ import re
 from typing import Any, Dict, List
 
 from langchain_openai import ChatOpenAI
-from langchain.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate
 
 
 llm = ChatOpenAI(
