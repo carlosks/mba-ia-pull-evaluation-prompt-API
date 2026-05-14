@@ -109,6 +109,8 @@ uvicorn
 pydantic
 - Não coloque crases markdown envolvendo o JSON final.
 - Não retorne texto fora do JSON.
+- Use Pydantic v2.
+- Para validação de strings, use constr(pattern=...) e nunca constr(regex=...).
 
 BUG:
 {bug}
