@@ -1,4 +1,4 @@
-#!/Users/carlosks/Desktop/fullcycle/mba-ia-pull-evaluation-prompt-API/venv/bin/python3
+#!/Users/carlosks/Desktop/fullcycle/mba-ia-pull-evaluation-prompt-API/venv/bin/python3.12
 import sys
 from distro.distro import main
 if __name__ == '__main__':
