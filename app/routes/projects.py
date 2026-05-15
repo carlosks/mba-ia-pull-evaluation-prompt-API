@@ -303,7 +303,16 @@ def generate_solution(payload: ProjectGenerateRequest):
     """
 
     try:
-        result = build_solution_project_response(payload.bug)
+        solution = generate_solution_project(payload.bug)
+
+        result = build_solution_project_response(
+            payload.bug,
+            solution.get("user_story", ""),
+            solution.get("acceptance_criteria", []),
+            solution.get("technical_analysis", ""),
+            solution.get("solution_plan", []),
+            solution.get("files", {}),
+        )
 
         return {
             "project_name": result.get("project_name"),
