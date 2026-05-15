@@ -308,12 +308,48 @@ def build_supplier_api_main_py() -> str:
     """
     Gera um main.py padronizado para bugs envolvendo cadastro de fornecedor,
     CNPJ, endereço e contatos.
+
+    Esta versão usa SQLite para persistir os fornecedores em banco local.
     Compatível com Pydantic v2.
     """
 
-    return r'''from typing import List, Dict
+    return r'''import sqlite3
+from pathlib import Path
+from typing import List, Optional
+
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, field_validator
+
+
+DB_PATH = Path("fornecedores.db")
+
+
+def get_connection():
+    """
+    Cria uma conexão SQLite.
+    """
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def init_db():
+    """
+    Cria a tabela de fornecedores, caso ainda não exista.
+    """
+
+    with get_connection() as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS fornecedores (
+                cnpj TEXT PRIMARY KEY,
+                razao_social TEXT NOT NULL,
+                endereco TEXT NOT NULL,
+                contatos TEXT NOT NULL
+            )
+            """
+        )
+        conn.commit()
 
 
 def somente_digitos(valor: str) -> str:
@@ -346,6 +382,27 @@ def validar_cnpj(cnpj: str) -> bool:
     digito_2 = 0 if resto_2 < 2 else 11 - resto_2
 
     return int(cnpj[12]) == digito_1 and int(cnpj[13]) == digito_2
+
+
+def contatos_to_text(contatos: List[str]) -> str:
+    """
+    Converte lista de contatos para texto persistível.
+    """
+    return "\n".join(contatos)
+
+
+def text_to_contatos(contatos_texto: str) -> List[str]:
+    """
+    Converte texto do banco para lista de contatos.
+    """
+    if not contatos_texto:
+        return []
+
+    return [
+        contato.strip()
+        for contato in contatos_texto.splitlines()
+        if contato.strip()
+    ]
 
 
 class Fornecedor(BaseModel):
@@ -384,7 +441,11 @@ class Fornecedor(BaseModel):
         if not value:
             raise ValueError("Informe pelo menos um contato.")
 
-        contatos_validos = [contato.strip() for contato in value if contato and contato.strip()]
+        contatos_validos = [
+            contato.strip()
+            for contato in value
+            if contato and contato.strip()
+        ]
 
         if not contatos_validos:
             raise ValueError("Informe pelo menos um contato válido.")
@@ -392,27 +453,50 @@ class Fornecedor(BaseModel):
         return contatos_validos
 
 
-fornecedores_db: Dict[str, Fornecedor] = {}
+class FornecedorResponse(BaseModel):
+    razao_social: str
+    cnpj: str
+    endereco: str
+    contatos: List[str]
+
+
+def fornecedor_from_row(row: sqlite3.Row) -> FornecedorResponse:
+    """
+    Converte uma linha SQLite em resposta da API.
+    """
+
+    return FornecedorResponse(
+        razao_social=row["razao_social"],
+        cnpj=row["cnpj"],
+        endereco=row["endereco"],
+        contatos=text_to_contatos(row["contatos"]),
+    )
 
 
 app = FastAPI(
     title="API de Fornecedores",
-    description="API gerada automaticamente para cadastro e consulta de fornecedores.",
+    description="API gerada automaticamente para cadastro e consulta de fornecedores com persistência SQLite.",
     version="1.0.0",
 )
+
+
+@app.on_event("startup")
+def startup_event():
+    init_db()
 
 
 @app.get("/")
 def root():
     return {
-        "msg": "API de fornecedores gerada com sucesso 🚀"
+        "msg": "API de fornecedores com SQLite rodando 🚀"
     }
 
 
 @app.get("/health")
 def health():
     return {
-        "status": "ok"
+        "status": "ok",
+        "database": str(DB_PATH)
     }
 
 
@@ -421,15 +505,42 @@ def criar_fornecedor(fornecedor: Fornecedor):
     """
     Cadastra um novo fornecedor.
     O CNPJ deve ser válido e não pode estar duplicado.
+    Os dados são persistidos em SQLite.
     """
 
-    if fornecedor.cnpj in fornecedores_db:
-        raise HTTPException(
-            status_code=409,
-            detail="Fornecedor já cadastrado para este CNPJ.",
+    init_db()
+
+    with get_connection() as conn:
+        existente = conn.execute(
+            "SELECT cnpj FROM fornecedores WHERE cnpj = ?",
+            (fornecedor.cnpj,)
+        ).fetchone()
+
+        if existente:
+            raise HTTPException(
+                status_code=409,
+                detail="Fornecedor já cadastrado para este CNPJ.",
+            )
+
+        conn.execute(
+            """
+            INSERT INTO fornecedores (
+                cnpj,
+                razao_social,
+                endereco,
+                contatos
+            )
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                fornecedor.cnpj,
+                fornecedor.razao_social,
+                fornecedor.endereco,
+                contatos_to_text(fornecedor.contatos),
+            )
         )
 
-    fornecedores_db[fornecedor.cnpj] = fornecedor
+        conn.commit()
 
     return {
         "message": "Fornecedor criado com sucesso",
@@ -437,20 +548,40 @@ def criar_fornecedor(fornecedor: Fornecedor):
     }
 
 
-@app.get("/fornecedores")
+@app.get("/fornecedores", response_model=List[FornecedorResponse])
 def listar_fornecedores():
     """
-    Lista todos os fornecedores cadastrados.
+    Lista todos os fornecedores cadastrados no banco SQLite.
     """
 
-    return list(fornecedores_db.values())
+    init_db()
+
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT
+                cnpj,
+                razao_social,
+                endereco,
+                contatos
+            FROM fornecedores
+            ORDER BY razao_social
+            """
+        ).fetchall()
+
+    return [
+        fornecedor_from_row(row)
+        for row in rows
+    ]
 
 
-@app.get("/fornecedores/cnpj/{cnpj}")
+@app.get("/fornecedores/cnpj/{cnpj}", response_model=FornecedorResponse)
 def obter_fornecedor_por_cnpj(cnpj: str):
     """
     Consulta um fornecedor pelo CNPJ.
     """
+
+    init_db()
 
     cnpj_limpo = somente_digitos(cnpj)
 
@@ -460,15 +591,137 @@ def obter_fornecedor_por_cnpj(cnpj: str):
             detail="CNPJ inválido.",
         )
 
-    fornecedor = fornecedores_db.get(cnpj_limpo)
+    with get_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT
+                cnpj,
+                razao_social,
+                endereco,
+                contatos
+            FROM fornecedores
+            WHERE cnpj = ?
+            """,
+            (cnpj_limpo,)
+        ).fetchone()
 
-    if not fornecedor:
+    if not row:
         raise HTTPException(
             status_code=404,
             detail="Fornecedor não encontrado.",
         )
 
-    return fornecedor
+    return fornecedor_from_row(row)
+
+
+@app.put("/fornecedores/cnpj/{cnpj}", response_model=FornecedorResponse)
+def atualizar_fornecedor_por_cnpj(cnpj: str, fornecedor: Fornecedor):
+    """
+    Atualiza um fornecedor existente pelo CNPJ.
+    """
+
+    init_db()
+
+    cnpj_limpo = somente_digitos(cnpj)
+
+    if not validar_cnpj(cnpj_limpo):
+        raise HTTPException(
+            status_code=400,
+            detail="CNPJ inválido.",
+        )
+
+    if cnpj_limpo != fornecedor.cnpj:
+        raise HTTPException(
+            status_code=400,
+            detail="O CNPJ da URL deve ser igual ao CNPJ do corpo da requisição.",
+        )
+
+    with get_connection() as conn:
+        existente = conn.execute(
+            "SELECT cnpj FROM fornecedores WHERE cnpj = ?",
+            (cnpj_limpo,)
+        ).fetchone()
+
+        if not existente:
+            raise HTTPException(
+                status_code=404,
+                detail="Fornecedor não encontrado.",
+            )
+
+        conn.execute(
+            """
+            UPDATE fornecedores
+            SET
+                razao_social = ?,
+                endereco = ?,
+                contatos = ?
+            WHERE cnpj = ?
+            """,
+            (
+                fornecedor.razao_social,
+                fornecedor.endereco,
+                contatos_to_text(fornecedor.contatos),
+                cnpj_limpo,
+            )
+        )
+
+        conn.commit()
+
+        row = conn.execute(
+            """
+            SELECT
+                cnpj,
+                razao_social,
+                endereco,
+                contatos
+            FROM fornecedores
+            WHERE cnpj = ?
+            """,
+            (cnpj_limpo,)
+        ).fetchone()
+
+    return fornecedor_from_row(row)
+
+
+@app.delete("/fornecedores/cnpj/{cnpj}")
+def excluir_fornecedor_por_cnpj(cnpj: str):
+    """
+    Exclui um fornecedor pelo CNPJ.
+    """
+
+    init_db()
+
+    cnpj_limpo = somente_digitos(cnpj)
+
+    if not validar_cnpj(cnpj_limpo):
+        raise HTTPException(
+            status_code=400,
+            detail="CNPJ inválido.",
+        )
+
+    with get_connection() as conn:
+        existente = conn.execute(
+            "SELECT cnpj FROM fornecedores WHERE cnpj = ?",
+            (cnpj_limpo,)
+        ).fetchone()
+
+        if not existente:
+            raise HTTPException(
+                status_code=404,
+                detail="Fornecedor não encontrado.",
+            )
+
+        conn.execute(
+            "DELETE FROM fornecedores WHERE cnpj = ?",
+            (cnpj_limpo,)
+        )
+
+        conn.commit()
+
+    return {
+        "message": "Fornecedor excluído com sucesso",
+        "cnpj": cnpj_limpo,
+    }
 
 
 @app.get("/relatorioRespostasFornecedor")
@@ -481,6 +734,8 @@ def relatorio_respostas_fornecedor(
     Simula a consulta do relatório de respostas do fornecedor.
     """
 
+    init_db()
+
     cnpj_limpo = somente_digitos(pCnpj)
 
     if not validar_cnpj(cnpj_limpo):
@@ -489,15 +744,29 @@ def relatorio_respostas_fornecedor(
             detail="CNPJ inválido.",
         )
 
-    fornecedor = fornecedores_db.get(cnpj_limpo)
+    with get_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT
+                cnpj,
+                razao_social,
+                endereco,
+                contatos
+            FROM fornecedores
+            WHERE cnpj = ?
+            """,
+            (cnpj_limpo,)
+        ).fetchone()
 
-    if not fornecedor:
+    if not row:
         raise HTTPException(
             status_code=404,
             detail="Fornecedor não encontrado.",
         )
 
-    if fornecedor.razao_social != pRazaoSocial:
+    fornecedor = fornecedor_from_row(row)
+
+    if fornecedor.razao_social.strip().upper() != pRazaoSocial.strip().upper():
         raise HTTPException(
             status_code=404,
             detail="Fornecedor não encontrado para a razão social informada.",
