@@ -85,7 +85,11 @@ O JSON deve seguir exatamente esta estrutura:
 REGRAS OBRIGATÓRIAS:
 - Gere código Python completo e funcional.
 - Use FastAPI.
-- Use Pydantic.
+- Use Pydantic v2.
+- Nunca use constr(regex=...). Em Pydantic v2 use sempre constr(pattern=...).
+- Para expressões regulares em Python, use string raw, por exemplo: constr(pattern=r"^\d{{14}}$").
+- O código Python gerado deve ser importável sem erro com: python -c "from main import app; print('OK')".
+- Garanta indentação Python válida em todas as classes, funções e decorators.
 - O arquivo main.py deve poder ser executado com: uvicorn main:app --reload --port 8004.
 - O código deve conter endpoints coerentes com o bug.
 - Se o bug falar de fornecedor, CNPJ, endereço, contatos ou cadastro de fornecedor, gere endpoints de fornecedores.
@@ -253,6 +257,36 @@ def generate_fallback_readme(bug: str) -> str:
 
     return "\n".join(lines)
 
+def sanitize_generated_python_code(content: str) -> str:
+    """
+    Corrige automaticamente padrões comuns gerados pela OpenAI
+    que quebram em Pydantic v2 ou Python moderno.
+    """
+    if not content:
+        return ""
+
+    # Corrige Pydantic v1:
+    # constr(regex='...')
+    # para Pydantic v2:
+    # constr(pattern=r'...')
+    content = re.sub(
+        r"constr\(\s*regex\s*=\s*(['\"])(.*?)\1",
+        lambda m: f"constr(pattern=r{m.group(1)}{m.group(2)}{m.group(1)}",
+        content,
+    )
+
+    # Se já veio como constr(pattern='^\d{14}$'), transforma em raw string.
+    content = re.sub(
+        r"constr\(\s*pattern\s*=\s*(['\"])([^'\"]*\\d[^'\"]*)\1",
+        lambda m: f"constr(pattern=r{m.group(1)}{m.group(2)}{m.group(1)}",
+        content,
+    )
+
+    # Remove espaços em branco no fim das linhas.
+    lines = [line.rstrip() for line in content.splitlines()]
+
+    return "\n".join(lines).strip() + "\n"
+
 
 def ensure_files(files: Any, bug: str) -> Dict[str, str]:
     if not isinstance(files, dict):
@@ -271,7 +305,7 @@ def ensure_files(files: Any, bug: str) -> Dict[str, str]:
     if not requirements_txt:
         requirements_txt = "fastapi\nuvicorn\npydantic\n"
 
-    files["main.py"] = str(main_py)
+    files["main.py"] = sanitize_generated_python_code(str(main_py))
     files["README.md"] = str(readme_md)
     files["requirements.txt"] = str(requirements_txt)
 
