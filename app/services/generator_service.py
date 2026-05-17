@@ -4,38 +4,16 @@ load_dotenv()
 import os
 import json
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 
 
-_llm: Optional[ChatOpenAI] = None
-
-
-def get_llm() -> ChatOpenAI:
-    """
-    Cria o LLM somente quando necessário.
-    Isso evita erro de import caso a OPENAI_API_KEY ainda não esteja carregada.
-    """
-    global _llm
-
-    if _llm is None:
-        api_key = os.getenv("OPENAI_API_KEY")
-
-        if not api_key:
-            raise ValueError(
-                "OPENAI_API_KEY não encontrada. "
-                "Crie o arquivo .env na raiz do projeto e informe OPENAI_API_KEY."
-            )
-
-        _llm = ChatOpenAI(
-            model=os.getenv("LLM_MODEL", "gpt-4o-mini"),
-            temperature=0.2,
-            api_key=api_key,
-        )
-
-    return _llm
+llm = ChatOpenAI(
+    model=os.getenv("LLM_MODEL", "gpt-4o-mini"),
+    temperature=0.2
+)
 
 
 prompt = ChatPromptTemplate.from_template("""
@@ -107,30 +85,32 @@ O JSON deve seguir exatamente esta estrutura:
 REGRAS OBRIGATÓRIAS:
 - Gere código Python completo e funcional.
 - Use FastAPI.
-- Use Pydantic v2.
-- Use Pydantic field_validator quando precisar validar campos.
-- Nunca use constr(regex=...). Em Pydantic v2 use sempre constr(pattern=...).
-- Para expressões regulares em Python, use string raw, por exemplo: constr(pattern=r"^\\d{{14}}$").
-- O código Python gerado deve ser importável sem erro com: python -c "from main import app; print('OK')".
-- Garanta indentação Python válida em todas as classes, funções e decorators.
+- Use Pydantic.
 - O arquivo main.py deve poder ser executado com: uvicorn main:app --reload --port 8004.
 - O código deve conter endpoints coerentes com o bug.
 - Se o bug falar de fornecedor, CNPJ, endereço, contatos ou cadastro de fornecedor, gere endpoints de fornecedores.
+
 - Se gerar API de fornecedores, inclua:
   - POST /fornecedores
   - GET /fornecedores
   - GET /fornecedores/cnpj/{{cnpj}}
+  - PUT /fornecedores/cnpj/{{cnpj}}
+  - DELETE /fornecedores/cnpj/{{cnpj}}
   - GET /relatorioRespostasFornecedor
   - GET /health
+  
+  
 - Para fornecedores, o payload deve ter:
   - razao_social
   - cnpj
   - endereco
   - contatos
 - Para fornecedores, valide minimamente se endereço e contatos foram recebidos.
-- Para fornecedores, o CNPJ deve ser validado.
-- Para fornecedores, não permita cadastro duplicado do mesmo CNPJ.
-- Não use banco real neste momento. Use dicionário ou lista em memória.
+
+- Para bugs envolvendo fornecedor, CNPJ, endereço, contatos ou cadastro de fornecedor, use SQLite com arquivo fornecedores.db.
+- Para fornecedores, os dados devem continuar disponíveis após reiniciar a API.
+- Não use banco externo neste momento. Use SQLite local.
+
 - Não use dependências além de fastapi, uvicorn e pydantic.
 - O README.md deve explicar como executar e testar a API.
 - O requirements.txt deve conter exatamente:
@@ -139,6 +119,8 @@ uvicorn
 pydantic
 - Não coloque crases markdown envolvendo o JSON final.
 - Não retorne texto fora do JSON.
+- Use Pydantic v2.
+- Para validação de strings, use constr(pattern=...) e nunca constr(regex=...).
 
 BUG:
 {bug}
@@ -177,12 +159,13 @@ def extract_json_from_text(text: str) -> Dict[str, Any]:
     - JSON puro
     - JSON cercado por ```json
     - JSON com algum texto antes/depois
-    - tenta corrigir barras invertidas inválidas, como C:\\pasta
+    - tenta corrigir barras invertidas inválidas, como C:\pasta
     """
     if not text:
         raise ValueError("Resposta vazia da OpenAI.")
 
     cleaned = text.strip()
+
     cleaned = cleaned.replace("```json", "")
     cleaned = cleaned.replace("```", "")
     cleaned = cleaned.strip()
@@ -191,6 +174,8 @@ def extract_json_from_text(text: str) -> Dict[str, Any]:
         try:
             return json.loads(value)
         except json.JSONDecodeError:
+            # Corrige barras invertidas inválidas em JSON:
+            # Exemplo: C:\Prompts vira C:\\Prompts
             repaired = re.sub(r'\\(?!["\\/bfnrtu])', r"\\\\", value)
             return json.loads(repaired)
 
@@ -278,11 +263,9 @@ def generate_fallback_readme(bug: str) -> str:
 
     return "\n".join(lines)
 
-
 def sanitize_generated_python_code(content: str) -> str:
     """
-    Corrige automaticamente padrões comuns gerados pela OpenAI
-    que quebram em Pydantic v2 ou Python moderno.
+    Corrige padrões incompatíveis com Pydantic v2.
     """
     if not content:
         return ""
@@ -300,22 +283,44 @@ def sanitize_generated_python_code(content: str) -> str:
     )
 
     lines = [line.rstrip() for line in content.splitlines()]
-
     return "\n".join(lines).strip() + "\n"
+
+
+def is_supplier_bug(bug: str) -> bool:
+    if not bug:
+        return False
+
+    text = bug.lower()
+
+    supplier_terms = [
+        "fornecedor",
+        "fornecedores",
+        "cnpj",
+        "endereço",
+        "endereco",
+        "contato",
+        "contatos",
+        "cadastro de fornecedor",
+        "cadastrar fornecedor",
+        "sqlite",
+        "banco de dados",
+        "persistir",
+        "persistência",
+        "persistencia",
+    ]
+
+    return any(term in text for term in supplier_terms)
 
 
 def build_supplier_api_main_py() -> str:
     """
-    Gera um main.py padronizado para bugs envolvendo cadastro de fornecedor,
-    CNPJ, endereço e contatos.
-
-    Esta versão usa SQLite para persistir os fornecedores em banco local.
+    Gera main.py com persistência SQLite para fornecedores.
     Compatível com Pydantic v2.
     """
 
     return r'''import sqlite3
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, field_validator
@@ -325,19 +330,12 @@ DB_PATH = Path("fornecedores.db")
 
 
 def get_connection():
-    """
-    Cria uma conexão SQLite.
-    """
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
 
 
 def init_db():
-    """
-    Cria a tabela de fornecedores, caso ainda não exista.
-    """
-
     with get_connection() as conn:
         conn.execute(
             """
@@ -357,11 +355,6 @@ def somente_digitos(valor: str) -> str:
 
 
 def validar_cnpj(cnpj: str) -> bool:
-    """
-    Valida CNPJ usando os dígitos verificadores oficiais.
-    Aceita CNPJ com ou sem máscara.
-    """
-
     cnpj = somente_digitos(cnpj)
 
     if len(cnpj) != 14:
@@ -385,16 +378,10 @@ def validar_cnpj(cnpj: str) -> bool:
 
 
 def contatos_to_text(contatos: List[str]) -> str:
-    """
-    Converte lista de contatos para texto persistível.
-    """
     return "\n".join(contatos)
 
 
 def text_to_contatos(contatos_texto: str) -> List[str]:
-    """
-    Converte texto do banco para lista de contatos.
-    """
     if not contatos_texto:
         return []
 
@@ -461,10 +448,6 @@ class FornecedorResponse(BaseModel):
 
 
 def fornecedor_from_row(row: sqlite3.Row) -> FornecedorResponse:
-    """
-    Converte uma linha SQLite em resposta da API.
-    """
-
     return FornecedorResponse(
         razao_social=row["razao_social"],
         cnpj=row["cnpj"],
@@ -494,20 +477,16 @@ def root():
 
 @app.get("/health")
 def health():
+    init_db()
+
     return {
         "status": "ok",
         "database": str(DB_PATH)
     }
 
 
-@app.post("/fornecedores")
+@app.post("/fornecedores", response_model=FornecedorResponse)
 def criar_fornecedor(fornecedor: Fornecedor):
-    """
-    Cadastra um novo fornecedor.
-    O CNPJ deve ser válido e não pode estar duplicado.
-    Os dados são persistidos em SQLite.
-    """
-
     init_db()
 
     with get_connection() as conn:
@@ -542,45 +521,36 @@ def criar_fornecedor(fornecedor: Fornecedor):
 
         conn.commit()
 
-    return {
-        "message": "Fornecedor criado com sucesso",
-        "fornecedor": fornecedor,
-    }
+        row = conn.execute(
+            """
+            SELECT cnpj, razao_social, endereco, contatos
+            FROM fornecedores
+            WHERE cnpj = ?
+            """,
+            (fornecedor.cnpj,)
+        ).fetchone()
+
+    return fornecedor_from_row(row)
 
 
 @app.get("/fornecedores", response_model=List[FornecedorResponse])
 def listar_fornecedores():
-    """
-    Lista todos os fornecedores cadastrados no banco SQLite.
-    """
-
     init_db()
 
     with get_connection() as conn:
         rows = conn.execute(
             """
-            SELECT
-                cnpj,
-                razao_social,
-                endereco,
-                contatos
+            SELECT cnpj, razao_social, endereco, contatos
             FROM fornecedores
             ORDER BY razao_social
             """
         ).fetchall()
 
-    return [
-        fornecedor_from_row(row)
-        for row in rows
-    ]
+    return [fornecedor_from_row(row) for row in rows]
 
 
 @app.get("/fornecedores/cnpj/{cnpj}", response_model=FornecedorResponse)
 def obter_fornecedor_por_cnpj(cnpj: str):
-    """
-    Consulta um fornecedor pelo CNPJ.
-    """
-
     init_db()
 
     cnpj_limpo = somente_digitos(cnpj)
@@ -594,11 +564,7 @@ def obter_fornecedor_por_cnpj(cnpj: str):
     with get_connection() as conn:
         row = conn.execute(
             """
-            SELECT
-                cnpj,
-                razao_social,
-                endereco,
-                contatos
+            SELECT cnpj, razao_social, endereco, contatos
             FROM fornecedores
             WHERE cnpj = ?
             """,
@@ -616,10 +582,6 @@ def obter_fornecedor_por_cnpj(cnpj: str):
 
 @app.put("/fornecedores/cnpj/{cnpj}", response_model=FornecedorResponse)
 def atualizar_fornecedor_por_cnpj(cnpj: str, fornecedor: Fornecedor):
-    """
-    Atualiza um fornecedor existente pelo CNPJ.
-    """
-
     init_db()
 
     cnpj_limpo = somente_digitos(cnpj)
@@ -651,10 +613,7 @@ def atualizar_fornecedor_por_cnpj(cnpj: str, fornecedor: Fornecedor):
         conn.execute(
             """
             UPDATE fornecedores
-            SET
-                razao_social = ?,
-                endereco = ?,
-                contatos = ?
+            SET razao_social = ?, endereco = ?, contatos = ?
             WHERE cnpj = ?
             """,
             (
@@ -669,11 +628,7 @@ def atualizar_fornecedor_por_cnpj(cnpj: str, fornecedor: Fornecedor):
 
         row = conn.execute(
             """
-            SELECT
-                cnpj,
-                razao_social,
-                endereco,
-                contatos
+            SELECT cnpj, razao_social, endereco, contatos
             FROM fornecedores
             WHERE cnpj = ?
             """,
@@ -685,10 +640,6 @@ def atualizar_fornecedor_por_cnpj(cnpj: str, fornecedor: Fornecedor):
 
 @app.delete("/fornecedores/cnpj/{cnpj}")
 def excluir_fornecedor_por_cnpj(cnpj: str):
-    """
-    Exclui um fornecedor pelo CNPJ.
-    """
-
     init_db()
 
     cnpj_limpo = somente_digitos(cnpj)
@@ -730,10 +681,6 @@ def relatorio_respostas_fornecedor(
     pData: str,
     pRazaoSocial: str,
 ):
-    """
-    Simula a consulta do relatório de respostas do fornecedor.
-    """
-
     init_db()
 
     cnpj_limpo = somente_digitos(pCnpj)
@@ -747,11 +694,7 @@ def relatorio_respostas_fornecedor(
     with get_connection() as conn:
         row = conn.execute(
             """
-            SELECT
-                cnpj,
-                razao_social,
-                endereco,
-                contatos
+            SELECT cnpj, razao_social, endereco, contatos
             FROM fornecedores
             WHERE cnpj = ?
             """,
@@ -781,27 +724,6 @@ def relatorio_respostas_fornecedor(
         "status": "Relatório encontrado",
     }
 '''
-
-
-def is_supplier_bug(bug: str) -> bool:
-    if not bug:
-        return False
-
-    text = bug.lower()
-
-    supplier_terms = [
-        "fornecedor",
-        "fornecedores",
-        "cnpj",
-        "endereço",
-        "endereco",
-        "contato",
-        "contatos",
-        "cadastro de fornecedor",
-        "cadastrar fornecedor",
-    ]
-
-    return any(term in text for term in supplier_terms)
 
 
 def ensure_files(files: Any, bug: str) -> Dict[str, str]:
@@ -841,7 +763,7 @@ def generate_all(bug: str) -> Dict[str, Any]:
     - POST /projects/generate
     - POST /projects/generate-full
     """
-    chain = prompt | get_llm()
+    chain = prompt | llm
 
     response = chain.invoke({"bug": bug})
     text = response.content.strip()
@@ -849,6 +771,7 @@ def generate_all(bug: str) -> Dict[str, Any]:
     parts = text.split("Dado")
 
     user_story = clean_user_story(parts[0])
+
     acceptance_criteria = []
 
     if len(parts) > 1:
@@ -870,7 +793,7 @@ def generate_solution_project(bug: str) -> Dict[str, Any]:
     """
     Gera solução técnica completa para o bug, incluindo código.
     """
-    chain = solution_prompt | get_llm()
+    chain = solution_prompt | llm
 
     response = chain.invoke({"bug": bug})
     raw_text = response.content.strip()
@@ -882,39 +805,6 @@ def generate_solution_project(bug: str) -> Dict[str, Any]:
     technical_analysis = str(data.get("technical_analysis", "")).strip()
     solution_plan = ensure_list(data.get("solution_plan", []))
     files = ensure_files(data.get("files", {}), bug)
-
-    if is_supplier_bug(bug):
-        if not user_story:
-            user_story = (
-                "Como um usuário, eu quero cadastrar fornecedores com CNPJ válido, "
-                "endereço e contatos, para que todos os dados sejam persistidos corretamente."
-            )
-
-        if not acceptance_criteria:
-            acceptance_criteria = [
-                "Dado que eu tenha um CNPJ válido, uma razão social, um endereço e contatos para o fornecedor",
-                "Quando eu enviar uma requisição POST para /fornecedores com esses dados",
-                "Então o fornecedor deve ser cadastrado com todos os dados corretamente",
-                "E eu devo conseguir recuperar o fornecedor cadastrado através do endpoint GET /fornecedores/cnpj/{cnpj}",
-                "E o sistema deve impedir cadastro duplicado do mesmo CNPJ",
-            ]
-
-        if not technical_analysis:
-            technical_analysis = (
-                "O bug indica persistência parcial de fornecedor. "
-                "A solução deve validar o CNPJ, impedir duplicidade e garantir que razão social, "
-                "endereço e contatos sejam armazenados e recuperados corretamente."
-            )
-
-        if not solution_plan:
-            solution_plan = [
-                "Criar modelo de fornecedor com razão social, CNPJ, endereço e contatos.",
-                "Implementar validação real de CNPJ.",
-                "Implementar POST /fornecedores com bloqueio de CNPJ duplicado.",
-                "Implementar GET /fornecedores para listagem.",
-                "Implementar GET /fornecedores/cnpj/{cnpj} para consulta por CNPJ.",
-                "Testar cadastro, consulta e duplicidade.",
-            ]
 
     if not user_story:
         fallback = generate_all(bug)
