@@ -4,16 +4,38 @@ load_dotenv()
 import os
 import json
 import re
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 
 
-llm = ChatOpenAI(
-    model=os.getenv("LLM_MODEL", "gpt-4o-mini"),
-    temperature=0.2
-)
+_llm: Optional[ChatOpenAI] = None
+
+
+def get_llm() -> ChatOpenAI:
+    """
+    Cria o LLM somente quando necessário.
+    Isso evita erro de import caso a OPENAI_API_KEY ainda não esteja carregada.
+    """
+    global _llm
+
+    if _llm is None:
+        api_key = os.getenv("OPENAI_API_KEY")
+
+        if not api_key:
+            raise ValueError(
+                "OPENAI_API_KEY não encontrada. "
+                "Crie o arquivo .env na raiz do projeto e informe OPENAI_API_KEY."
+            )
+
+        _llm = ChatOpenAI(
+            model=os.getenv("LLM_MODEL", "gpt-4o-mini"),
+            temperature=0.2,
+            api_key=api_key,
+        )
+
+    return _llm
 
 
 prompt = ChatPromptTemplate.from_template("""
@@ -85,11 +107,18 @@ O JSON deve seguir exatamente esta estrutura:
 REGRAS OBRIGATÓRIAS:
 - Gere código Python completo e funcional.
 - Use FastAPI.
-- Use Pydantic.
-- O arquivo main.py deve poder ser executado com: uvicorn main:app --reload --port 8004.
+- Use Pydantic v2.
+- Use Pydantic field_validator quando precisar validar campos.
+- Nunca use constr(regex=...). Em Pydantic v2 use sempre constr(pattern=...).
+- Para expressões regulares em Python, use string raw, por exemplo: constr(pattern=r"^\\d{{14}}$").
+- O código Python gerado deve ser importável sem erro com: python -c "from main import app; print('OK')".
+- Garanta indentação Python válida em todas as classes, funções e decorators.
+- O arquivo main.py deve poder ser executado com: python -m uvicorn main:app --reload --port 8004.
 - O código deve conter endpoints coerentes com o bug.
 - Se o bug falar de fornecedor, CNPJ, endereço, contatos ou cadastro de fornecedor, gere endpoints de fornecedores.
-
+- Para bugs envolvendo fornecedor, CNPJ, endereço, contatos ou cadastro de fornecedor, use SQLite com arquivo fornecedores.db.
+- Para fornecedores, os dados devem continuar disponíveis após reiniciar a API.
+- Não use banco externo neste momento. Use SQLite local.
 - Se gerar API de fornecedores, inclua:
   - POST /fornecedores
   - GET /fornecedores
@@ -98,19 +127,14 @@ REGRAS OBRIGATÓRIAS:
   - DELETE /fornecedores/cnpj/{{cnpj}}
   - GET /relatorioRespostasFornecedor
   - GET /health
-  
-  
 - Para fornecedores, o payload deve ter:
   - razao_social
   - cnpj
   - endereco
   - contatos
-- Para fornecedores, valide minimamente se endereço e contatos foram recebidos.
-
-- Para bugs envolvendo fornecedor, CNPJ, endereço, contatos ou cadastro de fornecedor, use SQLite com arquivo fornecedores.db.
-- Para fornecedores, os dados devem continuar disponíveis após reiniciar a API.
-- Não use banco externo neste momento. Use SQLite local.
-
+- Para fornecedores, valide se endereço e contatos foram recebidos.
+- Para fornecedores, o CNPJ deve ser validado.
+- Para fornecedores, não permita cadastro duplicado do mesmo CNPJ.
 - Não use dependências além de fastapi, uvicorn e pydantic.
 - O README.md deve explicar como executar e testar a API.
 - O requirements.txt deve conter exatamente:
@@ -119,8 +143,6 @@ uvicorn
 pydantic
 - Não coloque crases markdown envolvendo o JSON final.
 - Não retorne texto fora do JSON.
-- Use Pydantic v2.
-- Para validação de strings, use constr(pattern=...) e nunca constr(regex=...).
 
 BUG:
 {bug}
@@ -159,13 +181,12 @@ def extract_json_from_text(text: str) -> Dict[str, Any]:
     - JSON puro
     - JSON cercado por ```json
     - JSON com algum texto antes/depois
-    - tenta corrigir barras invertidas inválidas, como C:\pasta
+    - tenta corrigir barras invertidas inválidas, como C:\\pasta
     """
     if not text:
         raise ValueError("Resposta vazia da OpenAI.")
 
     cleaned = text.strip()
-
     cleaned = cleaned.replace("```json", "")
     cleaned = cleaned.replace("```", "")
     cleaned = cleaned.strip()
@@ -174,8 +195,6 @@ def extract_json_from_text(text: str) -> Dict[str, Any]:
         try:
             return json.loads(value)
         except json.JSONDecodeError:
-            # Corrige barras invertidas inválidas em JSON:
-            # Exemplo: C:\Prompts vira C:\\Prompts
             repaired = re.sub(r'\\(?!["\\/bfnrtu])', r"\\\\", value)
             return json.loads(repaired)
 
@@ -250,7 +269,7 @@ def generate_fallback_readme(bug: str) -> str:
         "",
         "```bash",
         "pip install -r requirements.txt",
-        "uvicorn main:app --reload --port 8004",
+        "python -m uvicorn main:app --reload --port 8004",
         "```",
         "",
         "Acesse:",
@@ -263,9 +282,11 @@ def generate_fallback_readme(bug: str) -> str:
 
     return "\n".join(lines)
 
+
 def sanitize_generated_python_code(content: str) -> str:
     """
-    Corrige padrões incompatíveis com Pydantic v2.
+    Corrige automaticamente padrões comuns gerados pela OpenAI
+    que quebram em Pydantic v2 ou Python moderno.
     """
     if not content:
         return ""
@@ -725,6 +746,204 @@ def relatorio_respostas_fornecedor(
     }
 '''
 
+def generate_supplier_readme_sqlite(bug: str) -> str:
+    """
+    Gera README.md completo para projetos de fornecedores com SQLite.
+    """
+
+    lines = [
+        "# API de Fornecedores com SQLite",
+        "",
+        "Projeto gerado automaticamente a partir do seguinte BUG:",
+        "",
+        "```text",
+        bug,
+        "```",
+        "",
+        "## Objetivo",
+        "",
+        "Esta API corrige um problema de cadastro de fornecedores em que os dados eram salvos parcialmente ou perdidos após reiniciar a aplicação.",
+        "",
+        "A solução implementa:",
+        "",
+        "- Cadastro de fornecedor com CNPJ válido",
+        "- Persistência dos dados em banco SQLite",
+        "- Consulta de fornecedor por CNPJ",
+        "- Validação real dos dígitos verificadores do CNPJ",
+        "- Bloqueio de cadastro duplicado do mesmo CNPJ",
+        "- Atualização e exclusão de fornecedor",
+        "- Consulta simulada de relatório de respostas do fornecedor",
+        "",
+        "## Tecnologias utilizadas",
+        "",
+        "- Python",
+        "- FastAPI",
+        "- Pydantic v2",
+        "- SQLite",
+        "- Uvicorn",
+        "",
+        "## Banco de dados",
+        "",
+        "A API utiliza SQLite local.",
+        "",
+        "Ao iniciar a aplicação, será criado automaticamente o arquivo:",
+        "",
+        "```text",
+        "fornecedores.db",
+        "```",
+        "",
+        "## Como executar no macOS ou Linux",
+        "",
+        "```bash",
+        "python3 -m venv venv",
+        "source venv/bin/activate",
+        "pip install -r requirements.txt",
+        "python -m uvicorn main:app --reload --port 8004",
+        "```",
+        "",
+        "## Como executar no Windows PowerShell",
+        "",
+        "```powershell",
+        "python -m venv venv",
+        ".\\venv\\Scripts\\activate",
+        "pip install -r requirements.txt",
+        "python -m uvicorn main:app --reload --port 8004",
+        "```",
+        "",
+        "Acesse:",
+        "",
+        "```text",
+        "http://127.0.0.1:8004/docs",
+        "```",
+        "",
+        "## Endpoints disponíveis",
+        "",
+        "```text",
+        "GET    /",
+        "GET    /health",
+        "POST   /fornecedores",
+        "GET    /fornecedores",
+        "GET    /fornecedores/cnpj/{cnpj}",
+        "PUT    /fornecedores/cnpj/{cnpj}",
+        "DELETE /fornecedores/cnpj/{cnpj}",
+        "GET    /relatorioRespostasFornecedor",
+        "```",
+        "",
+        "## Teste 1 — Verificar saúde da API",
+        "",
+        "Endpoint:",
+        "",
+        "```text",
+        "GET /health",
+        "```",
+        "",
+        "Resposta esperada:",
+        "",
+        "```json",
+        "{",
+        '  "status": "ok",',
+        '  "database": "fornecedores.db"',
+        "}",
+        "```",
+        "",
+        "## Teste 2 — Cadastrar fornecedor",
+        "",
+        "Endpoint:",
+        "",
+        "```text",
+        "POST /fornecedores",
+        "```",
+        "",
+        "Payload:",
+        "",
+        "```json",
+        "{",
+        '  "razao_social": "3B-DOCTOR COMERCIO DE PRODUTOS MEDICOS LTDA",',
+        '  "cnpj": "04601824000178",',
+        '  "endereco": "Rua Exemplo, 100, Centro, Porto Alegre, RS, CEP 90000000",',
+        '  "contatos": [',
+        '    "Responsável - contato@exemplo.com - 51999999999"',
+        "  ]",
+        "}",
+        "```",
+        "",
+        "Resposta esperada: a API deve retornar o fornecedor cadastrado com razão social, CNPJ, endereço e contatos.",
+        "",
+        "## Teste 3 — Consultar fornecedor por CNPJ",
+        "",
+        "```text",
+        "GET /fornecedores/cnpj/04601824000178",
+        "```",
+        "",
+        "Resposta esperada: a API deve retornar o fornecedor completo.",
+        "",
+        "## Teste 4 — Bloqueio de duplicidade",
+        "",
+        "Execute novamente o mesmo POST /fornecedores usando o mesmo CNPJ.",
+        "",
+        "Resultado esperado:",
+        "",
+        "```text",
+        "409 Conflict",
+        "```",
+        "",
+        "## Teste 5 — CNPJ inválido",
+        "",
+        "Use este CNPJ:",
+        "",
+        "```text",
+        "11111111111111",
+        "```",
+        "",
+        "Resultado esperado:",
+        "",
+        "```text",
+        "422 Unprocessable Entity",
+        "```",
+        "",
+        "## Teste 6 — Persistência SQLite",
+        "",
+        "1. Cadastre o fornecedor.",
+        "2. Consulte por CNPJ.",
+        "3. Pare a API com CTRL + C.",
+        "4. Suba novamente:",
+        "",
+        "```bash",
+        "python -m uvicorn main:app --reload --port 8004",
+        "```",
+        "",
+        "5. Consulte novamente:",
+        "",
+        "```text",
+        "GET /fornecedores/cnpj/04601824000178",
+        "```",
+        "",
+        "Se o fornecedor continuar aparecendo, a persistência SQLite está funcionando.",
+        "",
+        "## Teste 7 — Atualizar fornecedor",
+        "",
+        "```text",
+        "PUT /fornecedores/cnpj/04601824000178",
+        "```",
+        "",
+        "## Teste 8 — Excluir fornecedor",
+        "",
+        "```text",
+        "DELETE /fornecedores/cnpj/04601824000178",
+        "```",
+        "",
+        "Após excluir, a consulta por CNPJ deve retornar 404 Not Found.",
+        "",
+        "## Observação",
+        "",
+        "Este projeto usa SQLite local para prototipação.",
+        "",
+        "Para produção, recomenda-se evoluir para PostgreSQL, SQLAlchemy ou SQLModel, Alembic, autenticação, testes automatizados e logs estruturados.",
+        "",
+    ]
+
+    return "\n".join(lines)
+
 
 def ensure_files(files: Any, bug: str) -> Dict[str, str]:
     if not isinstance(files, dict):
@@ -736,6 +955,7 @@ def ensure_files(files: Any, bug: str) -> Dict[str, str]:
 
     if is_supplier_bug(bug):
         main_py = build_supplier_api_main_py()
+        readme_md = generate_supplier_readme_sqlite(bug)
 
     if not main_py:
         main_py = generate_fallback_main_py()
@@ -763,7 +983,7 @@ def generate_all(bug: str) -> Dict[str, Any]:
     - POST /projects/generate
     - POST /projects/generate-full
     """
-    chain = prompt | llm
+    chain = prompt | get_llm()
 
     response = chain.invoke({"bug": bug})
     text = response.content.strip()
@@ -771,7 +991,6 @@ def generate_all(bug: str) -> Dict[str, Any]:
     parts = text.split("Dado")
 
     user_story = clean_user_story(parts[0])
-
     acceptance_criteria = []
 
     if len(parts) > 1:
@@ -793,7 +1012,7 @@ def generate_solution_project(bug: str) -> Dict[str, Any]:
     """
     Gera solução técnica completa para o bug, incluindo código.
     """
-    chain = solution_prompt | llm
+    chain = solution_prompt | get_llm()
 
     response = chain.invoke({"bug": bug})
     raw_text = response.content.strip()
@@ -805,6 +1024,42 @@ def generate_solution_project(bug: str) -> Dict[str, Any]:
     technical_analysis = str(data.get("technical_analysis", "")).strip()
     solution_plan = ensure_list(data.get("solution_plan", []))
     files = ensure_files(data.get("files", {}), bug)
+
+    if is_supplier_bug(bug):
+        if not user_story:
+            user_story = (
+                "Como um usuário, eu quero cadastrar fornecedores com CNPJ válido, "
+                "endereço e contatos, para que todos os dados sejam persistidos corretamente."
+            )
+
+        if not acceptance_criteria:
+            acceptance_criteria = [
+                "Dado que eu tenha um CNPJ válido, uma razão social, um endereço e contatos para o fornecedor",
+                "Quando eu enviar uma requisição POST para /fornecedores com esses dados",
+                "Então o fornecedor deve ser cadastrado com todos os dados corretamente",
+                "E eu devo conseguir recuperar o fornecedor cadastrado através do endpoint GET /fornecedores/cnpj/{cnpj}",
+                "E o sistema deve impedir cadastro duplicado do mesmo CNPJ",
+                "E ao reiniciar a API os dados devem continuar persistidos no banco SQLite",
+            ]
+
+        if not technical_analysis:
+            technical_analysis = (
+                "O bug indica persistência parcial de fornecedor e perda de dados após reinício. "
+                "A solução deve validar o CNPJ, impedir duplicidade e garantir que razão social, "
+                "endereço e contatos sejam armazenados e recuperados corretamente usando SQLite."
+            )
+
+        if not solution_plan:
+            solution_plan = [
+                "Criar modelo de fornecedor com razão social, CNPJ, endereço e contatos.",
+                "Implementar validação real de CNPJ.",
+                "Criar banco SQLite fornecedores.db com tabela fornecedores.",
+                "Implementar POST /fornecedores com bloqueio de CNPJ duplicado.",
+                "Implementar GET /fornecedores para listagem.",
+                "Implementar GET /fornecedores/cnpj/{cnpj} para consulta por CNPJ.",
+                "Implementar PUT e DELETE por CNPJ.",
+                "Testar cadastro, consulta, duplicidade, CNPJ inválido e persistência após reinício.",
+            ]
 
     if not user_story:
         fallback = generate_all(bug)

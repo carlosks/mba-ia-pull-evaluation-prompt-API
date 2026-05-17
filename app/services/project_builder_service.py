@@ -727,15 +727,18 @@ def create_solution_project_files(
 
     original_readme = normalized_files.get("README.md", "")
 
-    normalized_files["README.md"] = build_solution_readme(
-        project_name=project_name,
-        bug=bug,
-        user_story=user_story,
-        acceptance_criteria=acceptance_criteria,
-        technical_analysis=technical_analysis,
-        solution_plan=solution_plan,
-        original_readme=original_readme,
-    )
+    if original_readme and original_readme.strip():
+        normalized_files["README.md"] = original_readme
+    else:
+        normalized_files["README.md"] = build_solution_readme(
+            project_name=project_name,
+            bug=bug,
+            user_story=user_story,
+            acceptance_criteria=acceptance_criteria,
+            technical_analysis=technical_analysis,
+            solution_plan=solution_plan,
+            original_readme="",
+        )
 
     normalized_files["user_story.md"] = "\n".join([
         "# User Story",
