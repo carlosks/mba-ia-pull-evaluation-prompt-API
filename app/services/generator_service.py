@@ -944,6 +944,166 @@ def generate_supplier_readme_sqlite(bug: str) -> str:
 
     return "\n".join(lines)
 
+def build_supplier_api_tests_py() -> str:
+    """
+    Gera testes automatizados com pytest para a API de fornecedores.
+    """
+
+    return r'''import pytest
+from fastapi.testclient import TestClient
+
+import main
+
+
+@pytest.fixture(autouse=True)
+def usar_banco_de_teste(monkeypatch, tmp_path):
+    """
+    Cada teste usa um banco SQLite temporário próprio.
+
+    No Windows, isso evita PermissionError ao tentar apagar um arquivo
+    SQLite que ainda pode estar bloqueado por alguma conexão.
+    """
+    test_db_path = tmp_path / "test_fornecedores.db"
+
+    monkeypatch.setattr(main, "DB_PATH", test_db_path)
+
+    main.init_db()
+
+    yield
+
+
+@pytest.fixture
+def client():
+    return TestClient(main.app)
+
+
+def fornecedor_valido():
+    return {
+        "razao_social": "3B-DOCTOR COMERCIO DE PRODUTOS MEDICOS LTDA",
+        "cnpj": "04601824000178",
+        "endereco": "Rua Exemplo, 100, Centro, Porto Alegre, RS, CEP 90000000",
+        "contatos": [
+            "Responsável - contato@exemplo.com - 51999999999"
+        ],
+    }
+
+
+def test_health_retorna_ok(client):
+    response = client.get("/health")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "ok"
+
+
+def test_cadastrar_fornecedor_com_cnpj_valido(client):
+    payload = fornecedor_valido()
+
+    response = client.post("/fornecedores", json=payload)
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["razao_social"] == payload["razao_social"]
+    assert data["cnpj"] == payload["cnpj"]
+    assert data["endereco"] == payload["endereco"]
+    assert data["contatos"] == payload["contatos"]
+
+
+def test_consultar_fornecedor_por_cnpj(client):
+    payload = fornecedor_valido()
+
+    client.post("/fornecedores", json=payload)
+
+    response = client.get(f"/fornecedores/cnpj/{payload['cnpj']}")
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["cnpj"] == payload["cnpj"]
+    assert data["razao_social"] == payload["razao_social"]
+    assert data["endereco"] == payload["endereco"]
+    assert data["contatos"] == payload["contatos"]
+
+
+def test_bloqueia_cnpj_duplicado(client):
+    payload = fornecedor_valido()
+
+    primeira_resposta = client.post("/fornecedores", json=payload)
+    segunda_resposta = client.post("/fornecedores", json=payload)
+
+    assert primeira_resposta.status_code == 200
+    assert segunda_resposta.status_code == 409
+    assert segunda_resposta.json()["detail"] == "Fornecedor já cadastrado para este CNPJ."
+
+
+def test_rejeita_cnpj_invalido(client):
+    payload = fornecedor_valido()
+    payload["cnpj"] = "11111111111111"
+
+    response = client.post("/fornecedores", json=payload)
+
+    assert response.status_code == 422
+
+
+def test_atualizar_fornecedor_por_cnpj(client):
+    payload = fornecedor_valido()
+
+    client.post("/fornecedores", json=payload)
+
+    payload_atualizado = {
+        "razao_social": "3B-DOCTOR COMERCIO DE PRODUTOS MEDICOS LTDA",
+        "cnpj": "04601824000178",
+        "endereco": "Rua Atualizada, 200, Porto Alegre, RS",
+        "contatos": [
+            "Responsável Atualizado - atualizado@exemplo.com - 51988888888"
+        ],
+    }
+
+    response = client.put(
+        f"/fornecedores/cnpj/{payload['cnpj']}",
+        json=payload_atualizado,
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["cnpj"] == payload_atualizado["cnpj"]
+    assert data["razao_social"] == payload_atualizado["razao_social"]
+    assert data["endereco"] == payload_atualizado["endereco"]
+    assert data["contatos"] == payload_atualizado["contatos"]
+
+
+def test_excluir_fornecedor_por_cnpj(client):
+    payload = fornecedor_valido()
+
+    client.post("/fornecedores", json=payload)
+
+    delete_response = client.delete(f"/fornecedores/cnpj/{payload['cnpj']}")
+
+    assert delete_response.status_code == 200
+    assert delete_response.json()["cnpj"] == payload["cnpj"]
+
+    get_response = client.get(f"/fornecedores/cnpj/{payload['cnpj']}")
+
+    assert get_response.status_code == 404
+
+
+def test_persistencia_sqlite_apos_nova_conexao(client):
+    payload = fornecedor_valido()
+
+    response = client.post("/fornecedores", json=payload)
+
+    assert response.status_code == 200
+    assert main.DB_PATH.exists()
+
+    response = client.get(f"/fornecedores/cnpj/{payload['cnpj']}")
+
+    assert response.status_code == 200
+    assert response.json()["cnpj"] == payload["cnpj"]
+'''
 
 def ensure_files(files: Any, bug: str) -> Dict[str, str]:
     if not isinstance(files, dict):
@@ -956,6 +1116,12 @@ def ensure_files(files: Any, bug: str) -> Dict[str, str]:
     if is_supplier_bug(bug):
         main_py = build_supplier_api_main_py()
         readme_md = generate_supplier_readme_sqlite(bug)
+        files["test_fornecedores.py"] = build_supplier_api_tests_py()
+
+    if is_supplier_bug(bug):
+        requirements_txt = "fastapi\nuvicorn\npydantic\npytest\nhttpx\n"
+    elif not requirements_txt:
+        requirements_txt = "fastapi\nuvicorn\npydantic\n"
 
     if not main_py:
         main_py = generate_fallback_main_py()
