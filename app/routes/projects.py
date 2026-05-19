@@ -8,11 +8,14 @@ import tempfile
 from pathlib import Path
 from typing import List, Optional, Any, Dict
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 from starlette.background import BackgroundTask
 
+from app import models
+from app.security import get_current_user, get_db
 from app.services.generator_service import generate_all, generate_solution_project
 from app.services.project_builder_service import (
     build_project_response,
@@ -89,6 +92,18 @@ class GeneratedProjectFileContentResponse(BaseModel):
     filename: str
     content: str
     size_bytes: int
+
+
+class ProjectHistoryItem(BaseModel):
+    id: int
+    project_name: str
+    bug: str
+    status: Optional[str] = None
+    created_at: str
+
+
+class ProjectHistoryResponse(BaseModel):
+    projects: List[ProjectHistoryItem]
 
 
 # ============================================================
@@ -243,14 +258,90 @@ def _dict_to_clean_text(data: Dict[str, Any]) -> str:
     return "\n".join(lines).strip()
 
 
+def _require_project_owner(
+    project_name: str,
+    db: Session,
+    current_user: models.User,
+) -> models.Project:
+    """
+    Garante que o projeto pertence ao usuário autenticado.
+
+    Nesta versão, o campo zip_path armazena o project_name.
+    """
+
+    project = db.query(models.Project).filter(
+        models.Project.zip_path == project_name,
+        models.Project.owner_id == current_user.id,
+    ).first()
+
+    if not project:
+        raise HTTPException(
+            status_code=403,
+            detail="Você não tem permissão para acessar este projeto.",
+        )
+
+    return project
+
+
+def _save_project_history(
+    db: Session,
+    current_user: models.User,
+    bug: str,
+    user_story: str,
+    acceptance_criteria: List[str],
+    project_name: Optional[str],
+    project_path: str,
+    files: List[str],
+    technical_analysis: Optional[str] = None,
+    solution_plan: Optional[List[str]] = None,
+    status: str = "generated",
+) -> models.Project:
+    """
+    Salva o histórico do projeto gerado para o usuário autenticado.
+    """
+
+    history = models.Project(
+        bug=bug,
+        user_story=user_story or "",
+        acceptance_criteria=json.dumps(
+            acceptance_criteria or [],
+            ensure_ascii=False,
+        ),
+        code=json.dumps(
+            {
+                "project_name": project_name,
+                "project_path": project_path,
+                "technical_analysis": technical_analysis,
+                "solution_plan": solution_plan or [],
+                "files": files or [],
+            },
+            ensure_ascii=False,
+        ),
+        score=None,
+        status=status,
+        zip_path=project_name,
+        owner_id=current_user.id,
+    )
+
+    db.add(history)
+    db.commit()
+    db.refresh(history)
+
+    return history
+
+
 # ============================================================
-# Endpoints de geração
+# Endpoints de geração protegidos
 # ============================================================
 
 @router.post("/generate", response_model=ProjectGenerateResponse)
-def generate_project(payload: ProjectGenerateRequest):
+def generate_project(
+    payload: ProjectGenerateRequest,
+    current_user: models.User = Depends(get_current_user),
+):
     """
     Gera User Story e Critérios de Aceitação a partir de um bug.
+    Endpoint protegido por autenticação.
     """
 
     try:
@@ -272,20 +363,45 @@ def generate_project(payload: ProjectGenerateRequest):
 
 
 @router.post("/generate-full", response_model=ProjectGenerateFullResponse)
-def generate_full_project(payload: ProjectGenerateRequest):
+def generate_full_project(
+    payload: ProjectGenerateRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
     """
     Gera um projeto básico completo a partir de um bug.
+    Endpoint protegido por autenticação.
     """
 
     try:
         result = build_project_response(payload.bug)
 
+        project_name = result.get("project_name", "")
+        project_path = result.get("project_path", "")
+        user_story = result.get("user_story", "")
+        acceptance_criteria = result.get("acceptance_criteria", [])
+        files = result.get("files", [])
+
+        _save_project_history(
+            db=db,
+            current_user=current_user,
+            bug=payload.bug,
+            user_story=user_story,
+            acceptance_criteria=acceptance_criteria,
+            project_name=project_name,
+            project_path=project_path,
+            files=files,
+            technical_analysis=None,
+            solution_plan=[],
+            status="generated_full",
+        )
+
         return {
-            "project_name": result.get("project_name", ""),
-            "project_path": result.get("project_path", ""),
-            "user_story": result.get("user_story", ""),
-            "acceptance_criteria": result.get("acceptance_criteria", []),
-            "files": result.get("files", []),
+            "project_name": project_name,
+            "project_path": project_path,
+            "user_story": user_story,
+            "acceptance_criteria": acceptance_criteria,
+            "files": files,
         }
 
     except Exception as e:
@@ -296,10 +412,15 @@ def generate_full_project(payload: ProjectGenerateRequest):
 
 
 @router.post("/generate-solution", response_model=ProjectGenerateSolutionResponse)
-def generate_solution(payload: ProjectGenerateRequest):
+def generate_solution(
+    payload: ProjectGenerateRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
     """
     Gera User Story, Critérios de Aceitação, análise técnica,
     plano de solução e arquivos de projeto.
+    Endpoint protegido por autenticação.
     """
 
     try:
@@ -314,15 +435,37 @@ def generate_solution(payload: ProjectGenerateRequest):
             solution.get("files", {}),
         )
 
+        project_name = result.get("project_name")
+        project_path = result.get("project_path", "")
+        user_story = result.get("user_story", "")
+        acceptance_criteria = result.get("acceptance_criteria", [])
+        technical_analysis = result.get("technical_analysis", "")
+        solution_plan = result.get("solution_plan", [])
+        files = result.get("files", [])
+
+        _save_project_history(
+            db=db,
+            current_user=current_user,
+            bug=payload.bug,
+            user_story=user_story,
+            acceptance_criteria=acceptance_criteria,
+            project_name=project_name,
+            project_path=project_path,
+            files=files,
+            technical_analysis=technical_analysis,
+            solution_plan=solution_plan,
+            status="generated_solution",
+        )
+
         return {
-            "project_name": result.get("project_name"),
-            "project_path": result.get("project_path", ""),
+            "project_name": project_name,
+            "project_path": project_path,
             "generation_mode": result.get("generation_mode", "openai_solution"),
-            "user_story": result.get("user_story", ""),
-            "acceptance_criteria": result.get("acceptance_criteria", []),
-            "technical_analysis": result.get("technical_analysis", ""),
-            "solution_plan": result.get("solution_plan", []),
-            "files": result.get("files", []),
+            "user_story": user_story,
+            "acceptance_criteria": acceptance_criteria,
+            "technical_analysis": technical_analysis,
+            "solution_plan": solution_plan,
+            "files": files,
         }
 
     except Exception as e:
@@ -333,24 +476,71 @@ def generate_solution(payload: ProjectGenerateRequest):
 
 
 # ============================================================
-# Endpoints de consulta dos projetos gerados
+# Histórico do usuário autenticado
+# ============================================================
+
+@router.get("/history", response_model=ProjectHistoryResponse)
+def get_project_history(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """
+    Lista o histórico de projetos gerados pelo usuário autenticado.
+    """
+
+    projects = db.query(models.Project).filter(
+        models.Project.owner_id == current_user.id
+    ).order_by(models.Project.created_at.desc()).all()
+
+    return {
+        "projects": [
+            ProjectHistoryItem(
+                id=project.id,
+                project_name=project.zip_path or "",
+                bug=project.bug,
+                status=project.status,
+                created_at=project.created_at.isoformat()
+                if project.created_at
+                else "",
+            )
+            for project in projects
+        ]
+    }
+
+
+# ============================================================
+# Endpoints de consulta dos projetos gerados protegidos
 # ============================================================
 
 @router.get("/generated", response_model=GeneratedProjectsResponse)
-def list_generated_projects():
+def list_generated_projects(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
     """
-    Lista todos os projetos gerados.
+    Lista somente os projetos gerados pelo usuário autenticado.
     """
 
     GENERATED_PROJECTS_DIR.mkdir(parents=True, exist_ok=True)
 
+    user_projects = db.query(models.Project).filter(
+        models.Project.owner_id == current_user.id
+    ).order_by(models.Project.created_at.desc()).all()
+
     projects: List[GeneratedProjectSummary] = []
 
-    for project_dir in sorted(GENERATED_PROJECTS_DIR.iterdir()):
-        if project_dir.is_dir():
+    for project in user_projects:
+        project_name = project.zip_path
+
+        if not project_name:
+            continue
+
+        project_dir = GENERATED_PROJECTS_DIR / project_name
+
+        if project_dir.exists() and project_dir.is_dir():
             projects.append(
                 GeneratedProjectSummary(
-                    project_name=project_dir.name,
+                    project_name=project_name,
                     project_path=str(project_dir.resolve()),
                     files=_list_files(project_dir),
                 )
@@ -362,10 +552,17 @@ def list_generated_projects():
 
 
 @router.get("/generated/{project_name}/files", response_model=GeneratedProjectFilesResponse)
-def list_generated_project_files(project_name: str):
+def list_generated_project_files(
+    project_name: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
     """
-    Lista os arquivos de um projeto gerado específico.
+    Lista os arquivos de um projeto gerado específico,
+    desde que ele pertença ao usuário autenticado.
     """
+
+    _require_project_owner(project_name, db, current_user)
 
     project_dir = _safe_project_dir(project_name)
 
@@ -376,10 +573,18 @@ def list_generated_project_files(project_name: str):
 
 
 @router.get("/generated/{project_name}/files/{filename:path}", response_model=GeneratedProjectFileContentResponse)
-def read_generated_project_file(project_name: str, filename: str):
+def read_generated_project_file(
+    project_name: str,
+    filename: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
     """
-    Lê o conteúdo de um arquivo de um projeto gerado.
+    Lê o conteúdo de um arquivo de um projeto gerado,
+    desde que ele pertença ao usuário autenticado.
     """
+
+    _require_project_owner(project_name, db, current_user)
 
     file_path = _safe_file_path(project_name, filename)
     content = _read_text_file(file_path)
@@ -393,11 +598,19 @@ def read_generated_project_file(project_name: str, filename: str):
 
 
 @router.get("/generated/{project_name}/files/{filename:path}/word-text")
-def read_generated_project_file_as_word_text(project_name: str, filename: str):
+def read_generated_project_file_as_word_text(
+    project_name: str,
+    filename: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
     """
     Lê um arquivo gerado e retorna uma versão em texto limpo,
-    adequada para copiar e colar no Word.
+    adequada para copiar e colar no Word,
+    desde que o projeto pertença ao usuário autenticado.
     """
+
+    _require_project_owner(project_name, db, current_user)
 
     file_path = _safe_file_path(project_name, filename)
     content = _read_text_file(file_path)
@@ -423,15 +636,21 @@ def read_generated_project_file_as_word_text(project_name: str, filename: str):
 
 
 # ============================================================
-# Novo endpoint: download ZIP
+# Download ZIP protegido
 # ============================================================
 
 @router.get("/generated/{project_name}/download-zip")
-def download_generated_project_zip(project_name: str):
+def download_generated_project_zip(
+    project_name: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
     """
     Gera e baixa um arquivo ZIP contendo todos os arquivos
-    de um projeto gerado.
+    de um projeto gerado, desde que pertença ao usuário autenticado.
     """
+
+    _require_project_owner(project_name, db, current_user)
 
     project_dir = _safe_project_dir(project_name)
 
