@@ -12,7 +12,7 @@ Base.metadata.create_all(bind=engine)
 
 
 app = FastAPI(
-    title="MBA IA - Prompt Evaluation API",
+    title="MBA IA - Bug Evaluation API",
     description="API para geração de User Stories, soluções técnicas, ZIPs e testes automatizados a partir de Bugs",
     version="1.0.0",
 )
