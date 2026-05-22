@@ -1,14 +1,14 @@
 from __future__ import annotations
 
+import json
 import os
 import re
-import json
-import zipfile
 import tempfile
+import zipfile
 from pathlib import Path
-from typing import List, Optional, Any, Dict
+from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -21,10 +21,13 @@ from app.services.project_builder_service import (
     build_project_response,
     build_solution_project_response,
 )
+from app.services.usage_service import (
+    assert_user_can_generate,
+    register_usage,
+)
 
 
 router = APIRouter(
-    prefix="/projects",
     tags=["Projects"],
 )
 
@@ -206,11 +209,11 @@ def _markdown_to_word_text(content: str) -> str:
 
     text = content
 
-    # Remove cercas de código markdown.
+    # Remove cercas de código Markdown.
     text = re.sub(r"```[a-zA-Z0-9_-]*", "", text)
     text = text.replace("```", "")
 
-    # Converte títulos markdown.
+    # Converte títulos Markdown.
     text = re.sub(r"^#\s+", "", text, flags=re.MULTILINE)
     text = re.sub(r"^##\s+", "", text, flags=re.MULTILINE)
     text = re.sub(r"^###\s+", "", text, flags=re.MULTILINE)
@@ -331,18 +334,21 @@ def _save_project_history(
 
 
 # ============================================================
-# Endpoints de geração protegidos
+# Endpoints de geração protegidos com limite mensal
 # ============================================================
 
 @router.post("/generate", response_model=ProjectGenerateResponse)
 def generate_project(
     payload: ProjectGenerateRequest,
+    db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
     """
     Gera User Story e Critérios de Aceitação a partir de um bug.
-    Endpoint protegido por autenticação.
+    Endpoint protegido por autenticação e limite mensal de uso.
     """
+
+    assert_user_can_generate(db, current_user)
 
     try:
         result = generate_all(payload.bug)
@@ -350,12 +356,31 @@ def generate_project(
         if not isinstance(result, dict):
             raise ValueError("generate_all não retornou um dicionário válido.")
 
+        register_usage(
+            db=db,
+            user=current_user,
+            endpoint="/projects/generate",
+            project_name=None,
+            status="success",
+        )
+
         return {
             "user_story": result.get("user_story", ""),
             "acceptance_criteria": result.get("acceptance_criteria", []),
         }
 
+    except HTTPException:
+        raise
+
     except Exception as e:
+        register_usage(
+            db=db,
+            user=current_user,
+            endpoint="/projects/generate",
+            project_name=None,
+            status="failed",
+        )
+
         raise HTTPException(
             status_code=500,
             detail=f"Erro ao gerar projeto: {str(e)}",
@@ -370,8 +395,10 @@ def generate_full_project(
 ):
     """
     Gera um projeto básico completo a partir de um bug.
-    Endpoint protegido por autenticação.
+    Endpoint protegido por autenticação e limite mensal de uso.
     """
+
+    assert_user_can_generate(db, current_user)
 
     try:
         result = build_project_response(payload.bug)
@@ -396,6 +423,14 @@ def generate_full_project(
             status="generated_full",
         )
 
+        register_usage(
+            db=db,
+            user=current_user,
+            endpoint="/projects/generate-full",
+            project_name=project_name,
+            status="success",
+        )
+
         return {
             "project_name": project_name,
             "project_path": project_path,
@@ -404,7 +439,18 @@ def generate_full_project(
             "files": files,
         }
 
+    except HTTPException:
+        raise
+
     except Exception as e:
+        register_usage(
+            db=db,
+            user=current_user,
+            endpoint="/projects/generate-full",
+            project_name=None,
+            status="failed",
+        )
+
         raise HTTPException(
             status_code=500,
             detail=f"Erro ao gerar projeto completo: {str(e)}",
@@ -420,8 +466,10 @@ def generate_solution(
     """
     Gera User Story, Critérios de Aceitação, análise técnica,
     plano de solução e arquivos de projeto.
-    Endpoint protegido por autenticação.
+    Endpoint protegido por autenticação e limite mensal de uso.
     """
+
+    assert_user_can_generate(db, current_user)
 
     try:
         solution = generate_solution_project(payload.bug)
@@ -457,6 +505,14 @@ def generate_solution(
             status="generated_solution",
         )
 
+        register_usage(
+            db=db,
+            user=current_user,
+            endpoint="/projects/generate-solution",
+            project_name=project_name,
+            status="success",
+        )
+
         return {
             "project_name": project_name,
             "project_path": project_path,
@@ -468,7 +524,18 @@ def generate_solution(
             "files": files,
         }
 
+    except HTTPException:
+        raise
+
     except Exception as e:
+        register_usage(
+            db=db,
+            user=current_user,
+            endpoint="/projects/generate-solution",
+            project_name=None,
+            status="failed",
+        )
+
         raise HTTPException(
             status_code=500,
             detail=f"Erro ao gerar solução técnica: {str(e)}",
@@ -572,31 +639,6 @@ def list_generated_project_files(
     }
 
 
-@router.get("/generated/{project_name}/files/{filename:path}", response_model=GeneratedProjectFileContentResponse)
-def read_generated_project_file(
-    project_name: str,
-    filename: str,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
-):
-    """
-    Lê o conteúdo de um arquivo de um projeto gerado,
-    desde que ele pertença ao usuário autenticado.
-    """
-
-    _require_project_owner(project_name, db, current_user)
-
-    file_path = _safe_file_path(project_name, filename)
-    content = _read_text_file(file_path)
-
-    return {
-        "project_name": project_name,
-        "filename": filename,
-        "content": content,
-        "size_bytes": file_path.stat().st_size,
-    }
-
-
 @router.get("/generated/{project_name}/files/{filename:path}/word-text")
 def read_generated_project_file_as_word_text(
     project_name: str,
@@ -632,6 +674,31 @@ def read_generated_project_file_as_word_text(
         "filename": filename,
         "content": clean_text,
         "size_bytes": len(clean_text.encode("utf-8")),
+    }
+
+
+@router.get("/generated/{project_name}/files/{filename:path}", response_model=GeneratedProjectFileContentResponse)
+def read_generated_project_file(
+    project_name: str,
+    filename: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """
+    Lê o conteúdo de um arquivo de um projeto gerado,
+    desde que ele pertença ao usuário autenticado.
+    """
+
+    _require_project_owner(project_name, db, current_user)
+
+    file_path = _safe_file_path(project_name, filename)
+    content = _read_text_file(file_path)
+
+    return {
+        "project_name": project_name,
+        "filename": filename,
+        "content": content,
+        "size_bytes": file_path.stat().st_size,
     }
 
 

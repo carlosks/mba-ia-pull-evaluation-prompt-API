@@ -1,43 +1,46 @@
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 
-from app.database import Base, engine
-from app import models
-from app.routes.projects import router as projects_router
 from app.routes.auth import router as auth_router
-
-
-# Cria as tabelas automaticamente no SQLite app.db
-Base.metadata.create_all(bind=engine)
+from app.routes.projects import router as projects_router
+from app.services.db_migration_service import run_database_migrations
 
 
 app = FastAPI(
     title="MBA IA - Bug Evaluation API",
-    description="API para geração de User Stories, soluções técnicas, ZIPs e testes automatizados a partir de Bugs",
+    description=(
+        "API para geração de User Stories, soluções técnicas, "
+        "ZIPs e testes automatizados a partir de Bugs"
+    ),
     version="1.0.0",
 )
 
 
-# CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Em produção, restringir para o domínio do frontend
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+@app.on_event("startup")
+def startup_event():
+    """
+    Executa migrações simples ao iniciar a aplicação.
 
-
-# Rotas
-app.include_router(auth_router, prefix="/auth", tags=["Auth"])
-app.include_router(projects_router)
+    Garante compatibilidade entre:
+    - SQLite local
+    - PostgreSQL no Render via DATABASE_URL
+    """
+    run_database_migrations()
 
 
 @app.get("/")
 def root():
-    return {"msg": "SaaS rodando 🚀"}
+    return {
+        "msg": "SaaS rodando 🚀",
+        "name": "MBA IA - Bug Evaluation API",
+    }
 
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {
+        "status": "ok",
+    }
+
+
+app.include_router(auth_router, prefix="/auth", tags=["Auth"])
+app.include_router(projects_router, prefix="/projects", tags=["Projects"])
