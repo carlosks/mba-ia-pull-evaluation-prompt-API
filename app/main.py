@@ -1,10 +1,8 @@
-from app.routes.admin import router as admin_router
-
 from fastapi import FastAPI
 
+from app.routes.admin import router as admin_router
 from app.routes.auth import router as auth_router
 from app.routes.projects import router as projects_router
-from app.services.db_migration_service import run_database_migrations
 
 
 app = FastAPI(
@@ -15,18 +13,6 @@ app = FastAPI(
     ),
     version="1.0.0",
 )
-
-
-@app.on_event("startup")
-def startup_event():
-    """
-    Executa migrações simples ao iniciar a aplicação.
-
-    Garante compatibilidade entre:
-    - SQLite local
-    - PostgreSQL no Render via DATABASE_URL
-    """
-    run_database_migrations()
 
 
 @app.get("/")
