@@ -1,3 +1,5 @@
+from app.routes.admin import router as admin_router
+
 from fastapi import FastAPI
 
 from app.routes.auth import router as auth_router
@@ -44,3 +46,4 @@ def health():
 
 app.include_router(auth_router, prefix="/auth", tags=["Auth"])
 app.include_router(projects_router, prefix="/projects", tags=["Projects"])
+app.include_router(admin_router, prefix="/admin", tags=["Admin"])
