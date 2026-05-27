@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MBA IA - Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>MBA IA - Bug Evaluation</h1>
+      <p>Dashboard do usuário</p>
+    </div>
+
+    <nav>
+      <a href="/docs">Swagger</a>
+      <a id="adminLink" href="/static/admin.html" class="hidden">Admin</a>
+      <button onclick="logout()">Sair</button>
+    </nav>
+  </header>
+
+  <main class="container">
+    <section class="grid">
+      <article class="card">
+        <h2>Minha conta</h2>
+        <p><strong>E-mail:</strong> <span id="userEmail">-</span></p>
+        <p><strong>Plano:</strong> <span id="userPlan">-</span></p>
+        <p><strong>Admin:</strong> <span id="userAdmin">-</span></p>
+      </article>
+
+      <article class="card">
+        <h2>Uso mensal</h2>
+        <p><strong>Limite:</strong> <span id="monthlyLimit">-</span></p>
+        <p><strong>Usado:</strong> <span id="monthlyUsage">-</span></p>
+        <p><strong>Restante:</strong> <span id="remainingGenerations">-</span></p>
+      </article>
+    </section>
+
+    <section class="card">
+      <h2>Gerar solução técnica</h2>
+
+      <label for="bugInput">Descrição do bug</label>
+      <textarea id="bugInput" rows="8" placeholder="Descreva o bug aqui..."></textarea>
+
+      <button onclick="generateSolution()">Gerar solução</button>
+
+      <p id="generateMessage" class="message"></p>
+
+      <pre id="generateResult" class="result-box"></pre>
+    </section>
+
+    <section class="card">
+      <h2>Histórico de projetos</h2>
+      <button onclick="loadHistory()">Atualizar histórico</button>
+      <div id="historyList" class="list"></div>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+  <script>
+    requireAuth();
+    loadDashboard();
+    loadHistory();
+  </script>
+</body>
+</html>

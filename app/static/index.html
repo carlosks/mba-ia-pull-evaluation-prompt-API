@@ -1,85 +1,23 @@
 <!DOCTYPE html>
-<html>
+<html lang="pt-BR">
 <head>
-    <title>Bug → User Story</title>
-    <style>
-        body { font-family: Arial; background:#0d1117; color:#c9d1d9; margin:40px; }
-        textarea { width:100%; height:120px; background:#161b22; color:white; padding:10px; }
-        button { padding:10px; background:#238636; color:white; border:none; margin-top:10px; }
-        .box { margin-top:20px; padding:15px; background:#161b22; border:1px solid #30363d; }
-        .add { background:#033a16; color:#aff5b4; }
-        .remove { background:#3f1517; color:#ffdcd7; }
-    </style>
+  <meta charset="UTF-8" />
+  <meta http-equiv="refresh" content="0; url=/static/login.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MBA IA - Bug Evaluation</title>
+  <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
-
-<h2>🚀 Bug → User Story</h2>
-
-<textarea id="bug">Ao clicar no botão salvar, o sistema não grava os dados</textarea>
-<br>
-<button onclick="run()">Gerar</button>
-
-<div id="status" class="box"></div>
-<div id="story" class="box"></div>
-<div id="diff" class="box"></div>
-
-<script>
-async function run() {
-    const bug = document.getElementById("bug").value;
-
-    document.getElementById("status").innerHTML = "⏳ Processando...";
-
-    const res = await fetch("/api/generate-project", {
-        method: "POST",
-        headers: {"Content-Type":"application/json"},
-        body: JSON.stringify({description: bug})
-    });
-
-    const data = await res.json();
-
-    document.getElementById("status").innerHTML = `
-        Score: ${data.evaluation.score}<br>
-        Status: ${data.evaluation.status}<br>
-        ${data.evaluation.expansion.detected ? "🚀 " + data.evaluation.expansion.label : ""}
-    `;
-
-    let storyHtml = "";
-
-    if (data.auto_improved && data.improvement) {
-        storyHtml = `
-        <h3>🟥 Antes</h3>
-        <div>${data.improvement.original}</div>
-        <h3>🟩 Depois</h3>
-        <div>${data.user_story}</div>
-        `;
-    } else {
-        storyHtml = `<div>${data.user_story}</div>`;
-    }
-
-    document.getElementById("story").innerHTML = storyHtml;
-
-    let html = "";
-
-    if (data.improvement) {
-        data.improvement.diff.forEach(line => {
-            if (line.startsWith("+")) html += `<div class="add">${line}</div>`;
-            else if (line.startsWith("-")) html += `<div class="remove">${line}</div>`;
-            else html += `<div>${line}</div>`;
-        });
-
-        if (data.improvement.new_scenarios.length > 0) {
-            html += "<br><b>🚀 Cenários adicionados:</b><br>";
-            data.improvement.new_scenarios.forEach(s => {
-                html += `<div class="add">+ ${s}</div>`;
-            });
-        }
-
-        html += `<br><b>🧠 Explicação:</b><br>${data.improvement.explanation}`;
-    }
-
-    document.getElementById("diff").innerHTML = html;
-}
-</script>
-
+  <main class="auth-container">
+    <section class="auth-card">
+      <h1>MBA IA</h1>
+      <h2>Bug Evaluation API</h2>
+      <p>Redirecionando para o login...</p>
+      <p>
+        Se não redirecionar automaticamente,
+        <a href="/static/login.html">clique aqui</a>.
+      </p>
+    </section>
+  </main>
 </body>
 </html>
