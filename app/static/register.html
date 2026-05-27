@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MBA IA - Criar Conta</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <main class="auth-container">
+    <section class="auth-card">
+      <h1>MBA IA</h1>
+      <h2>Criar conta</h2>
+
+      <p class="muted">
+        Crie sua conta para acessar o dashboard e gerar soluções técnicas a partir de bugs.
+      </p>
+
+      <form id="registerForm">
+        <label for="registerEmail">E-mail</label>
+        <input id="registerEmail" type="email" placeholder="seu-email@exemplo.com" required />
+
+        <label for="registerPassword">Senha</label>
+        <input id="registerPassword" type="password" placeholder="Digite uma senha" required />
+
+        <label for="registerPasswordConfirm">Confirmar senha</label>
+        <input id="registerPasswordConfirm" type="password" placeholder="Confirme a senha" required />
+
+        <button type="submit">Criar conta</button>
+      </form>
+
+      <p id="registerMessage" class="message"></p>
+
+<p class="muted small">
+  Ainda não tem conta?
+  <a href="/static/register.html">Criar conta</a>
+</p>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

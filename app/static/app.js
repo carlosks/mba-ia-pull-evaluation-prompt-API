@@ -297,6 +297,7 @@ async function toggleUserStatus(userId, isActive) {
 
 async function toggleUserAdmin(userId, isAdmin) {
   try {
+
     await apiPut(`/admin/users/${userId}/admin`, { is_admin: isAdmin });
     await loadAdminUsers();
   } catch (error) {
@@ -304,10 +305,63 @@ async function toggleUserAdmin(userId, isAdmin) {
   }
 }
 
+async function handleRegister(event) {
+  event.preventDefault();
+
+  const email = document.getElementById("registerEmail").value.trim();
+  const password = document.getElementById("registerPassword").value;
+  const passwordConfirm = document.getElementById("registerPasswordConfirm").value;
+  const message = document.getElementById("registerMessage");
+
+  message.textContent = "Criando conta...";
+  message.className = "message";
+
+  if (password !== passwordConfirm) {
+    message.textContent = "As senhas não conferem.";
+    message.className = "message error";
+    return;
+  }
+
+  try {
+    const response = await fetch(`${API_BASE}/auth/register`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        email,
+        password
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.detail || "Erro ao criar conta.");
+    }
+
+    message.textContent = "Conta criada com sucesso. Redirecionando para login...";
+    message.className = "message success";
+
+    setTimeout(() => {
+      window.location.href = "/static/login.html";
+    }, 1200);
+
+  } catch (error) {
+    message.textContent = error.message;
+    message.className = "message error";
+  }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   const loginForm = document.getElementById("loginForm");
+  const registerForm = document.getElementById("registerForm");
 
   if (loginForm) {
     loginForm.addEventListener("submit", handleLogin);
+  }
+
+  if (registerForm) {
+    registerForm.addEventListener("submit", handleRegister);
   }
 });
