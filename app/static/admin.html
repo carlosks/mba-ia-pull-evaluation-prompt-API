@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MBA IA - Admin</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>MBA IA - Admin</h1>
+      <p>Gerenciamento de usuários e planos</p>
+    </div>
+
+    <nav>
+      <a href="/static/dashboard.html">Dashboard</a>
+      <a href="/docs">Swagger</a>
+      <button onclick="logout()">Sair</button>
+    </nav>
+  </header>
+
+  <main class="container">
+    <section class="card">
+      <h2>Usuários</h2>
+      <button onclick="loadAdminUsers()">Atualizar usuários</button>
+      <p id="adminMessage" class="message"></p>
+      <div id="adminUsersList" class="list"></div>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+  <script>
+    requireAuth();
+    loadAdminUsers();
+  </script>
+</body>
+</html>

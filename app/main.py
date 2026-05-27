@@ -1,4 +1,6 @@
 from fastapi import FastAPI
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.routes.admin import router as admin_router
 from app.routes.auth import router as auth_router
@@ -15,12 +17,12 @@ app = FastAPI(
 )
 
 
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
+
 @app.get("/")
 def root():
-    return {
-        "msg": "SaaS rodando 🚀",
-        "name": "MBA IA - Bug Evaluation API",
-    }
+    return RedirectResponse(url="/static/login.html")
 
 
 @app.get("/health")

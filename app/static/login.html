@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MBA IA - Login</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <main class="auth-container">
+    <section class="auth-card">
+      <h1>MBA IA</h1>
+      <h2>Bug Evaluation API</h2>
+
+      <p class="muted">
+        Acesse sua conta para gerar user stories, soluções técnicas e projetos ZIP a partir de bugs.
+      </p>
+
+      <form id="loginForm">
+        <label for="email">E-mail</label>
+        <input id="email" type="email" placeholder="admin@exemplo.com" required />
+
+        <label for="password">Senha</label>
+        <input id="password" type="password" placeholder="123456" required />
+
+        <button type="submit">Entrar</button>
+      </form>
+
+      <p id="loginMessage" class="message"></p>
+
+      <p class="muted small">
+        Ainda não tem conta? Use o Swagger em <a href="/docs">/docs</a> para criar via /auth/register.
+      </p>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
