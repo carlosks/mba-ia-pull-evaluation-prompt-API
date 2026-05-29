@@ -32,15 +32,105 @@ function logout() {
   window.location.href = "/static/login.html";
 }
 
+function setMessage(elementId, text, type = "") {
+  const element = document.getElementById(elementId);
+
+  if (!element) {
+    return;
+  }
+
+  element.textContent = text;
+  element.className = type ? `message ${type}` : "message";
+}
+
+function formatList(items) {
+  if (!items || items.length === 0) {
+    return "<p>-</p>";
+  }
+
+  if (Array.isArray(items)) {
+    return `<ul>${items.map(item => `<li>${escapeHtml(String(item))}</li>`).join("")}</ul>`;
+  }
+
+  return `<p>${escapeHtml(String(items))}</p>`;
+}
+
+function escapeHtml(value) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function clearSolutionResult() {
+  const solutionResult = document.getElementById("solutionResult");
+  const generateResult = document.getElementById("generateResult");
+
+  if (solutionResult) {
+    solutionResult.classList.add("hidden");
+  }
+
+  if (generateResult) {
+    generateResult.classList.add("hidden");
+    generateResult.textContent = "";
+  }
+}
+
+function renderSolutionResult(data) {
+  const solutionResult = document.getElementById("solutionResult");
+
+  if (!solutionResult) {
+    return;
+  }
+
+  const status = document.getElementById("solutionStatus");
+  const userStory = document.getElementById("solutionUserStory");
+  const acceptanceCriteria = document.getElementById("solutionAcceptanceCriteria");
+  const technicalAnalysis = document.getElementById("solutionTechnicalAnalysis");
+  const solutionPlan = document.getElementById("solutionPlan");
+  const solutionFiles = document.getElementById("solutionFiles");
+  const solutionRaw = document.getElementById("solutionRaw");
+
+  if (status) {
+    status.textContent = data.generation_mode || data.status || "generated";
+  }
+
+  if (userStory) {
+    userStory.textContent = data.user_story || "-";
+  }
+
+  if (acceptanceCriteria) {
+    acceptanceCriteria.innerHTML = formatList(data.acceptance_criteria || []);
+  }
+
+  if (technicalAnalysis) {
+    technicalAnalysis.textContent = data.technical_analysis || "-";
+  }
+
+  if (solutionPlan) {
+    solutionPlan.innerHTML = formatList(data.solution_plan || []);
+  }
+
+  if (solutionFiles) {
+    solutionFiles.innerHTML = formatList(data.files || []);
+  }
+
+  if (solutionRaw) {
+    solutionRaw.textContent = JSON.stringify(data, null, 2);
+  }
+
+  solutionResult.classList.remove("hidden");
+}
+
 async function handleLogin(event) {
   event.preventDefault();
 
   const email = document.getElementById("email").value.trim();
   const password = document.getElementById("password").value;
-  const message = document.getElementById("loginMessage");
 
-  message.textContent = "Entrando...";
-  message.className = "message";
+  setMessage("loginMessage", "Entrando...");
 
   const formData = new URLSearchParams();
   formData.append("username", email);
@@ -55,7 +145,7 @@ async function handleLogin(event) {
       body: formData
     });
 
-    const data = await response.json();
+    const data = await safeJson(response);
 
     if (!response.ok) {
       throw new Error(data.detail || "Erro ao fazer login.");
@@ -63,14 +153,71 @@ async function handleLogin(event) {
 
     setToken(data.access_token);
 
-    message.textContent = "Login realizado com sucesso.";
-    message.className = "message success";
+    setMessage("loginMessage", "Login realizado com sucesso.", "success");
 
     window.location.href = "/static/dashboard.html";
 
   } catch (error) {
-    message.textContent = error.message;
-    message.className = "message error";
+    setMessage("loginMessage", error.message, "error");
+  }
+}
+
+async function handleRegister(event) {
+  event.preventDefault();
+
+  const email = document.getElementById("registerEmail").value.trim();
+  const password = document.getElementById("registerPassword").value;
+  const passwordConfirm = document.getElementById("registerPasswordConfirm").value;
+
+  setMessage("registerMessage", "Criando conta...");
+
+  if (password !== passwordConfirm) {
+    setMessage("registerMessage", "As senhas não conferem.", "error");
+    return;
+  }
+
+  try {
+    const response = await fetch(`${API_BASE}/auth/register`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        email,
+        password
+      })
+    });
+
+    const data = await safeJson(response);
+
+    if (!response.ok) {
+      throw new Error(data.detail || "Erro ao criar conta.");
+    }
+
+    setMessage(
+      "registerMessage",
+      "Conta criada com sucesso. Redirecionando para login...",
+      "success"
+    );
+
+    setTimeout(() => {
+      window.location.href = "/static/login.html";
+    }, 1200);
+
+  } catch (error) {
+    setMessage("registerMessage", error.message, "error");
+  }
+}
+
+async function safeJson(response) {
+  const text = await response.text();
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return {
+      detail: text || `Erro ${response.status}`
+    };
   }
 }
 
@@ -79,7 +226,7 @@ async function apiGet(path) {
     headers: authHeaders()
   });
 
-  const data = await response.json();
+  const data = await safeJson(response);
 
   if (!response.ok) {
     throw new Error(data.detail || `Erro ${response.status}`);
@@ -95,7 +242,7 @@ async function apiPost(path, payload) {
     body: JSON.stringify(payload)
   });
 
-  const data = await response.json();
+  const data = await safeJson(response);
 
   if (!response.ok) {
     throw new Error(data.detail || `Erro ${response.status}`);
@@ -111,7 +258,7 @@ async function apiPut(path, payload) {
     body: JSON.stringify(payload)
   });
 
-  const data = await response.json();
+  const data = await safeJson(response);
 
   if (!response.ok) {
     throw new Error(data.detail || `Erro ${response.status}`);
@@ -151,35 +298,40 @@ async function loadDashboard() {
 
 async function generateSolution() {
   const bugInput = document.getElementById("bugInput");
-  const message = document.getElementById("generateMessage");
-  const resultBox = document.getElementById("generateResult");
+
+  if (!bugInput) {
+    return;
+  }
 
   const bug = bugInput.value.trim();
 
   if (!bug) {
-    message.textContent = "Informe a descrição do bug.";
-    message.className = "message error";
+    setMessage("generateMessage", "Informe a descrição do bug.", "error");
     return;
   }
 
-  message.textContent = "Gerando solução técnica...";
-  message.className = "message";
-  resultBox.textContent = "";
+  clearSolutionResult();
+
+  setMessage("generateMessage", "Gerando solução técnica. Aguarde...");
 
   try {
     const data = await apiPost("/projects/generate-solution", { bug });
 
-    message.textContent = "Solução gerada com sucesso.";
-    message.className = "message success";
+    setMessage("generateMessage", "Solução gerada com sucesso.", "success");
 
-    resultBox.textContent = JSON.stringify(data, null, 2);
+    renderSolutionResult(data);
 
     await loadDashboard();
     await loadHistory();
 
   } catch (error) {
-    message.textContent = error.message;
-    message.className = "message error";
+    let message = error.message;
+
+    if (message.includes("Limite mensal")) {
+      message = `${message} Faça upgrade do plano ou aguarde o próximo ciclo mensal.`;
+    }
+
+    setMessage("generateMessage", message, "error");
   }
 }
 
@@ -202,15 +354,15 @@ async function loadHistory() {
 
     historyList.innerHTML = data.projects.map(project => `
       <div class="list-item">
-        <h3>${project.project_name || "Projeto sem nome"}</h3>
-        <p><strong>Status:</strong> ${project.status || "-"}</p>
-        <p><strong>Criado em:</strong> ${project.created_at || "-"}</p>
-        <p><strong>Bug:</strong> ${project.bug || "-"}</p>
+        <h3>${escapeHtml(project.project_name || "Projeto sem nome")}</h3>
+        <p><strong>Status:</strong> ${escapeHtml(project.status || "-")}</p>
+        <p><strong>Criado em:</strong> ${escapeHtml(project.created_at || "-")}</p>
+        <p><strong>Bug:</strong> ${escapeHtml(project.bug || "-")}</p>
       </div>
     `).join("");
 
   } catch (error) {
-    historyList.innerHTML = `<p class="message error">${error.message}</p>`;
+    historyList.innerHTML = `<p class="message error">${escapeHtml(error.message)}</p>`;
   }
 }
 
@@ -239,10 +391,10 @@ async function loadAdminUsers() {
 
     adminUsersList.innerHTML = data.users.map(user => `
       <div class="list-item">
-        <h3>${user.email}</h3>
+        <h3>${escapeHtml(user.email)}</h3>
 
         <p><strong>ID:</strong> ${user.id}</p>
-        <p><strong>Plano:</strong> ${user.plan}</p>
+        <p><strong>Plano:</strong> ${escapeHtml(user.plan)}</p>
         <p><strong>Limite mensal:</strong> ${user.monthly_generation_limit}</p>
         <p><strong>Ativo:</strong> ${user.is_active ? "Sim" : "Não"}</p>
         <p><strong>Admin:</strong> ${user.is_admin ? "Sim" : "Não"}</p>
@@ -252,14 +404,14 @@ async function loadAdminUsers() {
           <button onclick="changeUserPlan(${user.id}, 'pro')">Pro</button>
           <button onclick="changeUserPlan(${user.id}, 'team')">Team</button>
 
-          <button 
-            onclick="toggleUserStatus(${user.id}, ${!user.is_active})" 
+          <button
+            onclick="toggleUserStatus(${user.id}, ${!user.is_active})"
             class="${user.is_active ? "danger" : "success"}">
             ${user.is_active ? "Desativar" : "Ativar"}
           </button>
 
-          <button 
-            onclick="toggleUserAdmin(${user.id}, ${!user.is_admin})" 
+          <button
+            onclick="toggleUserAdmin(${user.id}, ${!user.is_admin})"
             class="secondary">
             ${user.is_admin ? "Remover Admin" : "Promover Admin"}
           </button>
@@ -297,59 +449,10 @@ async function toggleUserStatus(userId, isActive) {
 
 async function toggleUserAdmin(userId, isAdmin) {
   try {
-
     await apiPut(`/admin/users/${userId}/admin`, { is_admin: isAdmin });
     await loadAdminUsers();
   } catch (error) {
     alert(error.message);
-  }
-}
-
-async function handleRegister(event) {
-  event.preventDefault();
-
-  const email = document.getElementById("registerEmail").value.trim();
-  const password = document.getElementById("registerPassword").value;
-  const passwordConfirm = document.getElementById("registerPasswordConfirm").value;
-  const message = document.getElementById("registerMessage");
-
-  message.textContent = "Criando conta...";
-  message.className = "message";
-
-  if (password !== passwordConfirm) {
-    message.textContent = "As senhas não conferem.";
-    message.className = "message error";
-    return;
-  }
-
-  try {
-    const response = await fetch(`${API_BASE}/auth/register`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        email,
-        password
-      })
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.detail || "Erro ao criar conta.");
-    }
-
-    message.textContent = "Conta criada com sucesso. Redirecionando para login...";
-    message.className = "message success";
-
-    setTimeout(() => {
-      window.location.href = "/static/login.html";
-    }, 1200);
-
-  } catch (error) {
-    message.textContent = error.message;
-    message.className = "message error";
   }
 }
 
