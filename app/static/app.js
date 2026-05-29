@@ -342,27 +342,74 @@ async function loadHistory() {
     return;
   }
 
-  historyList.innerHTML = "<p>Carregando histórico...</p>";
+  historyList.innerHTML = `
+    <div class="history-loading">
+      <p>Carregando histórico...</p>
+    </div>
+  `;
 
   try {
     const data = await apiGet("/projects/history");
 
     if (!data.projects || data.projects.length === 0) {
-      historyList.innerHTML = "<p>Nenhum projeto encontrado.</p>";
+      historyList.innerHTML = `
+        <div class="empty-state">
+          <h3>Nenhum projeto encontrado</h3>
+          <p>Gere sua primeira solução técnica para que ela apareça aqui.</p>
+        </div>
+      `;
       return;
     }
 
-    historyList.innerHTML = data.projects.map(project => `
-      <div class="list-item">
-        <h3>${escapeHtml(project.project_name || "Projeto sem nome")}</h3>
-        <p><strong>Status:</strong> ${escapeHtml(project.status || "-")}</p>
-        <p><strong>Criado em:</strong> ${escapeHtml(project.created_at || "-")}</p>
-        <p><strong>Bug:</strong> ${escapeHtml(project.bug || "-")}</p>
-      </div>
-    `).join("");
+    historyList.innerHTML = data.projects.map(project => {
+      const projectName = project.project_name || "Projeto sem nome";
+      const status = project.status || "-";
+      const createdAt = formatDateTime(project.created_at);
+      const bug = project.bug || "-";
+      const shortBug = bug.length > 180 ? `${bug.substring(0, 180)}...` : bug;
+
+      return `
+        <article class="history-card">
+          <div class="history-card-header">
+            <div>
+              <h3>${escapeHtml(projectName)}</h3>
+              <p class="muted small">ID: ${project.id || "-"}</p>
+            </div>
+            <span class="badge">${escapeHtml(status)}</span>
+          </div>
+
+          <div class="history-meta">
+            <span><strong>Criado em:</strong> ${escapeHtml(createdAt)}</span>
+          </div>
+
+          <p class="history-bug">
+            <strong>Bug:</strong> ${escapeHtml(shortBug)}
+          </p>
+
+          <details class="history-details">
+            <summary>Ver detalhes</summary>
+            <div class="history-detail-content">
+              <p><strong>Nome do projeto:</strong></p>
+              <pre class="code-box">${escapeHtml(projectName)}</pre>
+
+              <p><strong>Descrição completa do bug:</strong></p>
+              <pre class="code-box">${escapeHtml(bug)}</pre>
+
+              <p><strong>Resposta bruta do histórico:</strong></p>
+              <pre class="code-box">${escapeHtml(JSON.stringify(project, null, 2))}</pre>
+            </div>
+          </details>
+        </article>
+      `;
+    }).join("");
 
   } catch (error) {
-    historyList.innerHTML = `<p class="message error">${escapeHtml(error.message)}</p>`;
+    historyList.innerHTML = `
+      <div class="empty-state error-state">
+        <h3>Erro ao carregar histórico</h3>
+        <p>${escapeHtml(error.message)}</p>
+      </div>
+    `;
   }
 }
 
@@ -453,6 +500,24 @@ async function toggleUserAdmin(userId, isAdmin) {
     await loadAdminUsers();
   } catch (error) {
     alert(error.message);
+  }
+}
+
+function formatDateTime(value) {
+  if (!value) {
+    return "-";
+  }
+
+  try {
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+      return value;
+    }
+
+    return date.toLocaleString("pt-BR");
+  } catch {
+    return value;
   }
 }
 
