@@ -25,7 +25,7 @@
       <article class="card">
         <h2>Minha conta</h2>
         <p><strong>E-mail:</strong> <span id="userEmail">-</span></p>
-        <p><strong>Plano:</strong> <span id="userPlan">-</span></p>
+        <p><strong>Plano:</strong> <span id="userPlan" class="badge">-</span></p>
         <p><strong>Admin:</strong> <span id="userAdmin">-</span></p>
       </article>
 
@@ -41,13 +41,56 @@
       <h2>Gerar solução técnica</h2>
 
       <label for="bugInput">Descrição do bug</label>
-      <textarea id="bugInput" rows="8" placeholder="Descreva o bug aqui..."></textarea>
+      <textarea
+        id="bugInput"
+        rows="8"
+        placeholder="Descreva o bug aqui. Exemplo: Ao tentar cadastrar fornecedor com CNPJ válido, o sistema salva apenas a razão social e não persiste endereço nem contatos."
+      ></textarea>
 
       <button onclick="generateSolution()">Gerar solução</button>
 
       <p id="generateMessage" class="message"></p>
 
-      <pre id="generateResult" class="result-box"></pre>
+      <div id="generateResult" class="result-box hidden"></div>
+
+      <div id="solutionResult" class="solution-result hidden">
+        <div class="solution-header">
+          <h3>Resultado gerado</h3>
+          <span id="solutionStatus" class="badge">-</span>
+        </div>
+
+        <div class="solution-grid">
+          <article class="solution-card">
+            <h4>User Story</h4>
+            <div id="solutionUserStory" class="solution-content">-</div>
+          </article>
+
+          <article class="solution-card">
+            <h4>Critérios de Aceitação</h4>
+            <div id="solutionAcceptanceCriteria" class="solution-content">-</div>
+          </article>
+        </div>
+
+        <article class="solution-card">
+          <h4>Análise Técnica</h4>
+          <div id="solutionTechnicalAnalysis" class="solution-content">-</div>
+        </article>
+
+        <article class="solution-card">
+          <h4>Plano de Solução</h4>
+          <div id="solutionPlan" class="solution-content">-</div>
+        </article>
+
+        <article class="solution-card">
+          <h4>Arquivos gerados</h4>
+          <div id="solutionFiles" class="solution-content">-</div>
+        </article>
+
+        <article class="solution-card">
+          <h4>Resposta completa</h4>
+          <pre id="solutionRaw" class="code-box">-</pre>
+        </article>
+      </div>
     </section>
 
     <section class="card">
