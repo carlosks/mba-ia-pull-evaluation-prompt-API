@@ -43,6 +43,15 @@ function setMessage(elementId, text, type = "") {
   element.className = type ? `message ${type}` : "message";
 }
 
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
 function formatList(items) {
   if (!items || items.length === 0) {
     return "<p>-</p>";
@@ -55,13 +64,59 @@ function formatList(items) {
   return `<p>${escapeHtml(String(items))}</p>`;
 }
 
-function escapeHtml(value) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+function formatDateTime(value) {
+  if (!value) {
+    return "-";
+  }
+
+  try {
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+      return value;
+    }
+
+    return date.toLocaleString("pt-BR");
+  } catch {
+    return value;
+  }
+}
+
+function formatTestCases(data) {
+  if (data.test_cases && Array.isArray(data.test_cases) && data.test_cases.length > 0) {
+    return formatList(data.test_cases);
+  }
+
+  if (data.tests && Array.isArray(data.tests) && data.tests.length > 0) {
+    return formatList(data.tests);
+  }
+
+  const files = data.files || [];
+
+  if (Array.isArray(files)) {
+    const testFiles = files.filter(file => {
+      const name = String(file).toLowerCase();
+      return name.includes("test") || name.includes("teste");
+    });
+
+    if (testFiles.length > 0) {
+      return `
+        <p>Foram gerados arquivos de teste:</p>
+        ${formatList(testFiles)}
+        <p class="muted small">
+          O conteúdo detalhado dos testes ainda não é retornado pela API.
+          Ele será incluído em uma evolução futura do backend.
+        </p>
+      `;
+    }
+  }
+
+  return `
+    <p>Nenhum caso de teste estruturado foi retornado pela API.</p>
+    <p class="muted small">
+      A próxima evolução do backend poderá incluir um campo test_cases com os cenários detalhados.
+    </p>
+  `;
 }
 
 function clearSolutionResult() {
@@ -90,6 +145,7 @@ function renderSolutionResult(data) {
   const acceptanceCriteria = document.getElementById("solutionAcceptanceCriteria");
   const technicalAnalysis = document.getElementById("solutionTechnicalAnalysis");
   const solutionPlan = document.getElementById("solutionPlan");
+  const solutionTestCases = document.getElementById("solutionTestCases");
   const solutionFiles = document.getElementById("solutionFiles");
   const solutionRaw = document.getElementById("solutionRaw");
 
@@ -113,6 +169,10 @@ function renderSolutionResult(data) {
     solutionPlan.innerHTML = formatList(data.solution_plan || []);
   }
 
+  if (solutionTestCases) {
+    solutionTestCases.innerHTML = formatTestCases(data);
+  }
+
   if (solutionFiles) {
     solutionFiles.innerHTML = formatList(data.files || []);
   }
@@ -122,6 +182,18 @@ function renderSolutionResult(data) {
   }
 
   solutionResult.classList.remove("hidden");
+}
+
+async function safeJson(response) {
+  const text = await response.text();
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return {
+      detail: text || `Erro ${response.status}`
+    };
+  }
 }
 
 async function handleLogin(event) {
@@ -152,7 +224,6 @@ async function handleLogin(event) {
     }
 
     setToken(data.access_token);
-
     setMessage("loginMessage", "Login realizado com sucesso.", "success");
 
     window.location.href = "/static/dashboard.html";
@@ -206,18 +277,6 @@ async function handleRegister(event) {
 
   } catch (error) {
     setMessage("registerMessage", error.message, "error");
-  }
-}
-
-async function safeJson(response) {
-  const text = await response.text();
-
-  try {
-    return JSON.parse(text);
-  } catch {
-    return {
-      detail: text || `Erro ${response.status}`
-    };
   }
 }
 
@@ -311,7 +370,6 @@ async function generateSolution() {
   }
 
   clearSolutionResult();
-
   setMessage("generateMessage", "Gerando solução técnica. Aguarde...");
 
   try {
@@ -500,24 +558,6 @@ async function toggleUserAdmin(userId, isAdmin) {
     await loadAdminUsers();
   } catch (error) {
     alert(error.message);
-  }
-}
-
-function formatDateTime(value) {
-  if (!value) {
-    return "-";
-  }
-
-  try {
-    const date = new Date(value);
-
-    if (Number.isNaN(date.getTime())) {
-      return value;
-    }
-
-    return date.toLocaleString("pt-BR");
-  } catch {
-    return value;
   }
 }
 
