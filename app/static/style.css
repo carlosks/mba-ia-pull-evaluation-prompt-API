@@ -399,3 +399,138 @@ button.success:hover {
     flex-direction: column;
   }
 }
+
+.code-box {
+  max-width: 100%;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.project-file-content {
+  max-width: 100%;
+  margin-top: 12px;
+}
+
+.project-file-content .code-box {
+  max-height: 520px;
+  overflow: auto;
+  padding: 16px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.project-file-item {
+  align-items: flex-start;
+}
+
+.project-file-main {
+  width: 100%;
+  min-width: 0;
+}
+
+.project-file-main span {
+  display: block;
+  max-width: 100%;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.history-card,
+.project-files-box,
+.solution-card {
+  max-width: 100%;
+  overflow: hidden;
+}
+.project-files-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.project-file-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+  border: 1px solid #dbe3ef;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.project-file-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  min-width: 0;
+}
+
+.project-file-main > span,
+.project-file-item > span {
+  flex: 1;
+  min-width: 180px;
+  font-family: monospace;
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+  word-break: break-word;
+}
+
+.project-file-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.project-file-actions button {
+  min-width: 105px;
+  padding: 9px 12px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.project-file-content {
+  width: 100%;
+  margin-top: 12px;
+}
+
+.project-file-content.hidden {
+  display: none;
+}
+
+.project-file-content .code-box {
+  max-width: 100%;
+  max-height: 520px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  padding: 16px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+@media (max-width: 760px) {
+  .project-file-main,
+  .project-file-item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .project-file-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .project-file-actions button {
+    min-width: auto;
+  }
+}
