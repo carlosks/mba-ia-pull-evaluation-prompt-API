@@ -32,9 +32,6 @@ router = APIRouter(
 )
 
 
-# Pasta onde os projetos gerados são salvos.
-# No Render ficará algo como /app/generated_projects.
-# Localmente ficará dentro da raiz do projeto.
 GENERATED_PROJECTS_DIR = Path("generated_projects")
 GENERATED_PROJECTS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -117,9 +114,7 @@ class ProjectHistoryResponse(BaseModel):
 def _safe_project_dir(project_name: str) -> Path:
     """
     Retorna o caminho seguro da pasta do projeto gerado.
-
-    Protege contra path traversal, por exemplo:
-    ../../arquivo
+    Protege contra path traversal.
     """
 
     if not project_name or project_name.strip() == "":
@@ -191,7 +186,7 @@ def _list_files(project_dir: Path) -> List[str]:
 
 def _read_text_file(file_path: Path) -> str:
     """
-    Lê arquivo de texto usando UTF-8.
+    Lê arquivo de texto usando UTF-8, com fallback para latin-1.
     """
 
     try:
@@ -210,22 +205,18 @@ def _markdown_to_word_text(content: str) -> str:
 
     text = content
 
-    # Remove cercas de código Markdown.
     text = re.sub(r"```[a-zA-Z0-9_-]*", "", text)
     text = text.replace("```", "")
 
-    # Converte títulos Markdown.
     text = re.sub(r"^#\s+", "", text, flags=re.MULTILINE)
     text = re.sub(r"^##\s+", "", text, flags=re.MULTILINE)
     text = re.sub(r"^###\s+", "", text, flags=re.MULTILINE)
     text = re.sub(r"^####\s+", "", text, flags=re.MULTILINE)
 
-    # Remove negrito/itálico simples.
     text = text.replace("**", "")
     text = text.replace("__", "")
     text = text.replace("*", "")
 
-    # Limpa múltiplas linhas em branco.
     text = re.sub(r"\n{3,}", "\n\n", text)
 
     return text.strip()
@@ -269,7 +260,6 @@ def _require_project_owner(
 ) -> models.Project:
     """
     Garante que o projeto pertence ao usuário autenticado.
-
     Nesta versão, o campo zip_path armazena o project_name.
     """
 
@@ -645,53 +635,6 @@ def list_generated_project_files(
     }
 
 
-@router.get(
-    "/generated/{project_name}/files/{filename:path}",
-    response_model=GeneratedProjectFileContentResponse,
-)
-def get_generated_project_file_content(
-    project_name: str,
-    filename: str,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
-):
-    """
-    Retorna o conteúdo textual de um arquivo gerado.
-    """
-
-    _require_project_owner(project_name, db, current_user)
-
-    file_path = _safe_file_path(project_name, filename)
-    content = _read_text_file(file_path)
-
-    return {
-        "project_name": project_name,
-        "filename": filename,
-        "content": content,
-        "size_bytes": file_path.stat().st_size,
-    }
-
-
-@router.get("/generated/{project_name}/files/{filename:path}/word-text")
-def get_generated_project_file_word_text(
-    project_name: str,
-    filename: str,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
-):
-    """
-    Retorna o conteúdo do arquivo em texto limpo, mais adequado para colar no Word.
-    """
-
-    _require_project_owner(project_name, db, current_user)
-
-    file_path = _safe_file_path(project_name, filename)
-    content = _read_text_file(file_path)
-    clean_text = _markdown_to_word_text(content)
-
-    return PlainTextResponse(clean_text)
-
-
 @router.get("/generated/{project_name}/download")
 def download_generated_project_zip(
     project_name: str,
@@ -735,6 +678,12 @@ def download_generated_project_zip(
     )
 
 
+# Atenção:
+# Estes dois endpoints específicos precisam ficar ANTES do endpoint genérico
+# /generated/{project_name}/files/{filename:path}.
+# Caso contrário, o FastAPI interpreta "README.md/download" ou
+# "README.md/word-text" como parte do filename.
+
 @router.get("/generated/{project_name}/files/{filename:path}/download")
 def download_generated_project_file(
     project_name: str,
@@ -755,3 +704,50 @@ def download_generated_project_file(
         filename=Path(filename).name,
         media_type="application/octet-stream",
     )
+
+
+@router.get("/generated/{project_name}/files/{filename:path}/word-text")
+def get_generated_project_file_word_text(
+    project_name: str,
+    filename: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """
+    Retorna o conteúdo do arquivo em texto limpo, mais adequado para colar no Word.
+    """
+
+    _require_project_owner(project_name, db, current_user)
+
+    file_path = _safe_file_path(project_name, filename)
+    content = _read_text_file(file_path)
+    clean_text = _markdown_to_word_text(content)
+
+    return PlainTextResponse(clean_text)
+
+
+@router.get(
+    "/generated/{project_name}/files/{filename:path}",
+    response_model=GeneratedProjectFileContentResponse,
+)
+def get_generated_project_file_content(
+    project_name: str,
+    filename: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """
+    Retorna o conteúdo textual de um arquivo gerado.
+    """
+
+    _require_project_owner(project_name, db, current_user)
+
+    file_path = _safe_file_path(project_name, filename)
+    content = _read_text_file(file_path)
+
+    return {
+        "project_name": project_name,
+        "filename": filename,
+        "content": content,
+        "size_bytes": file_path.stat().st_size,
+    }

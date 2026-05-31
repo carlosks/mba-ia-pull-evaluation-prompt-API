@@ -420,17 +420,20 @@ async function loadHistory() {
     }
 
     historyList.innerHTML = data.projects.map(project => {
-      const projectName = project.project_name || "Projeto sem nome";
+      const projectName = project.project_name || "";
+      const displayName = projectName || "Projeto sem nome";
       const status = project.status || "-";
       const createdAt = formatDateTime(project.created_at);
       const bug = project.bug || "-";
       const shortBug = bug.length > 180 ? `${bug.substring(0, 180)}...` : bug;
+      const safeProjectName = escapeHtml(projectName);
+      const filesContainerId = `projectFiles_${project.id}`;
 
       return `
         <article class="history-card">
           <div class="history-card-header">
             <div>
-              <h3>${escapeHtml(projectName)}</h3>
+              <h3>${escapeHtml(displayName)}</h3>
               <p class="muted small">ID: ${project.id || "-"}</p>
             </div>
             <span class="badge">${escapeHtml(status)}</span>
@@ -444,11 +447,23 @@ async function loadHistory() {
             <strong>Bug:</strong> ${escapeHtml(shortBug)}
           </p>
 
+          <div class="history-actions">
+            <button onclick="loadProjectFiles('${safeProjectName}', '${filesContainerId}')">
+              Ver arquivos
+            </button>
+
+            <button onclick="downloadProjectZip('${safeProjectName}')">
+              Baixar ZIP
+            </button>
+          </div>
+
+          <div id="${filesContainerId}" class="project-files-box hidden"></div>
+
           <details class="history-details">
             <summary>Ver detalhes</summary>
             <div class="history-detail-content">
               <p><strong>Nome do projeto:</strong></p>
-              <pre class="code-box">${escapeHtml(projectName)}</pre>
+              <pre class="code-box">${escapeHtml(displayName)}</pre>
 
               <p><strong>Descrição completa do bug:</strong></p>
               <pre class="code-box">${escapeHtml(bug)}</pre>
@@ -465,6 +480,222 @@ async function loadHistory() {
     historyList.innerHTML = `
       <div class="empty-state error-state">
         <h3>Erro ao carregar histórico</h3>
+        <p>${escapeHtml(error.message)}</p>
+      </div>
+    `;
+  }
+}
+
+function encodePathValue(value) {
+  return String(value)
+    .split("/")
+    .map(part => encodeURIComponent(part))
+    .join("/");
+}
+
+async function downloadBlob(path, filename) {
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: "GET",
+    headers: {
+      "Authorization": `Bearer ${getToken()}`
+    }
+  });
+
+  if (!response.ok) {
+    const data = await safeJson(response);
+    throw new Error(data.detail || `Erro ${response.status}`);
+  }
+
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+async function downloadProjectZip(projectName) {
+  if (!projectName) {
+    alert("Nome do projeto não informado.");
+    return;
+  }
+
+  try {
+    const encodedProjectName = encodeURIComponent(projectName);
+
+    await downloadBlob(
+      `/projects/generated/${encodedProjectName}/download`,
+      `${projectName}.zip`
+    );
+
+  } catch (error) {
+    alert(error.message);
+  }
+}
+
+async function downloadProjectFile(projectName, filename) {
+  if (!projectName || !filename) {
+    alert("Projeto ou arquivo não informado.");
+    return;
+  }
+
+  try {
+    const encodedProjectName = encodeURIComponent(projectName);
+    const encodedFilename = encodePathValue(filename);
+
+    await downloadBlob(
+      `/projects/generated/${encodedProjectName}/files/${encodedFilename}/download`,
+      filename.split("/").pop()
+    );
+
+  } catch (error) {
+    alert(error.message);
+  }
+}
+
+async function loadProjectFiles(projectName, containerId) {
+  const container = document.getElementById(containerId);
+
+  if (!container) {
+    return;
+  }
+
+  if (!projectName) {
+    container.classList.remove("hidden");
+    container.innerHTML = `
+      <div class="empty-state error-state">
+        <p>Nome do projeto não encontrado no histórico.</p>
+      </div>
+    `;
+    return;
+  }
+
+  container.classList.remove("hidden");
+  container.innerHTML = "<p>Carregando arquivos...</p>";
+
+  try {
+    const encodedProjectName = encodeURIComponent(projectName);
+    const data = await apiGet(`/projects/generated/${encodedProjectName}/files`);
+
+    if (!data.files || data.files.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <p>Nenhum arquivo encontrado para este projeto.</p>
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = `
+      <h4>Arquivos do projeto</h4>
+      <div class="project-files-list">
+        ${data.files.map(filename => `
+          <div class="project-file-item">
+            <span>${escapeHtml(filename)}</span>
+
+            <div class="project-file-actions">
+              <button onclick="viewProjectFile('${escapeHtml(projectName)}', '${escapeHtml(filename)}', '${containerId}')">
+                Ver conteúdo
+              </button>
+
+              <button onclick="downloadProjectFile('${escapeHtml(projectName)}', '${escapeHtml(filename)}')">
+                Baixar
+              </button>
+
+              <button onclick="viewProjectWordText('${escapeHtml(projectName)}', '${escapeHtml(filename)}', '${containerId}')">
+                Texto Word
+              </button>
+            </div>
+          </div>
+        `).join("")}
+      </div>
+
+      <div id="${containerId}_content" class="project-file-content"></div>
+    `;
+
+  } catch (error) {
+    container.innerHTML = `
+      <div class="empty-state error-state">
+        <p>${escapeHtml(error.message)}</p>
+      </div>
+    `;
+  }
+}
+
+async function viewProjectFile(projectName, filename, containerId) {
+  const contentBox = document.getElementById(`${containerId}_content`);
+
+  if (!contentBox) {
+    return;
+  }
+
+  contentBox.innerHTML = "<p>Carregando conteúdo do arquivo...</p>";
+
+  try {
+    const encodedProjectName = encodeURIComponent(projectName);
+    const encodedFilename = encodePathValue(filename);
+
+    const data = await apiGet(
+      `/projects/generated/${encodedProjectName}/files/${encodedFilename}`
+    );
+
+    contentBox.innerHTML = `
+      <h4>Conteúdo: ${escapeHtml(filename)}</h4>
+      <pre class="code-box">${escapeHtml(data.content || "")}</pre>
+    `;
+
+  } catch (error) {
+    contentBox.innerHTML = `
+      <div class="empty-state error-state">
+        <p>${escapeHtml(error.message)}</p>
+      </div>
+    `;
+  }
+}
+
+async function viewProjectWordText(projectName, filename, containerId) {
+  const contentBox = document.getElementById(`${containerId}_content`);
+
+  if (!contentBox) {
+    return;
+  }
+
+  contentBox.innerHTML = "<p>Gerando texto limpo para Word...</p>";
+
+  try {
+    const encodedProjectName = encodeURIComponent(projectName);
+    const encodedFilename = encodePathValue(filename);
+
+    const response = await fetch(
+      `${API_BASE}/projects/generated/${encodedProjectName}/files/${encodedFilename}/word-text`,
+      {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${getToken()}`
+        }
+      }
+    );
+
+    if (!response.ok) {
+      const data = await safeJson(response);
+      throw new Error(data.detail || `Erro ${response.status}`);
+    }
+
+    const text = await response.text();
+
+    contentBox.innerHTML = `
+      <h4>Texto para Word: ${escapeHtml(filename)}</h4>
+      <pre class="code-box">${escapeHtml(text)}</pre>
+    `;
+
+  } catch (error) {
+    contentBox.innerHTML = `
+      <div class="empty-state error-state">
         <p>${escapeHtml(error.message)}</p>
       </div>
     `;
