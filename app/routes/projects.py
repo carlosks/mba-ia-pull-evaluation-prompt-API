@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, PlainTextResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from starlette.background import BackgroundTask
@@ -72,6 +72,7 @@ class ProjectGenerateSolutionResponse(BaseModel):
     acceptance_criteria: List[str]
     technical_analysis: str
     solution_plan: List[str]
+    test_cases: List[str]
     files: List[str]
 
 
@@ -297,6 +298,7 @@ def _save_project_history(
     files: List[str],
     technical_analysis: Optional[str] = None,
     solution_plan: Optional[List[str]] = None,
+    test_cases: Optional[List[str]] = None,
     status: str = "generated",
 ) -> models.Project:
     """
@@ -316,6 +318,7 @@ def _save_project_history(
                 "project_path": project_path,
                 "technical_analysis": technical_analysis,
                 "solution_plan": solution_plan or [],
+                "test_cases": test_cases or [],
                 "files": files or [],
             },
             ensure_ascii=False,
@@ -420,6 +423,7 @@ def generate_full_project(
             files=files,
             technical_analysis=None,
             solution_plan=[],
+            test_cases=[],
             status="generated_full",
         )
 
@@ -465,7 +469,7 @@ def generate_solution(
 ):
     """
     Gera User Story, Critérios de Aceitação, análise técnica,
-    plano de solução e arquivos de projeto.
+    plano de solução, casos de teste e arquivos de projeto.
     Endpoint protegido por autenticação e limite mensal de uso.
     """
 
@@ -489,6 +493,7 @@ def generate_solution(
         acceptance_criteria = result.get("acceptance_criteria", [])
         technical_analysis = result.get("technical_analysis", "")
         solution_plan = result.get("solution_plan", [])
+        test_cases = solution.get("test_cases", [])
         files = result.get("files", [])
 
         _save_project_history(
@@ -502,6 +507,7 @@ def generate_solution(
             files=files,
             technical_analysis=technical_analysis,
             solution_plan=solution_plan,
+            test_cases=test_cases,
             status="generated_solution",
         )
 
@@ -521,6 +527,7 @@ def generate_solution(
             "acceptance_criteria": acceptance_criteria,
             "technical_analysis": technical_analysis,
             "solution_plan": solution_plan,
+            "test_cases": test_cases,
             "files": files,
         }
 
@@ -625,8 +632,7 @@ def list_generated_project_files(
     current_user: models.User = Depends(get_current_user),
 ):
     """
-    Lista os arquivos de um projeto gerado específico,
-    desde que ele pertença ao usuário autenticado.
+    Lista os arquivos de um projeto gerado do usuário autenticado.
     """
 
     _require_project_owner(project_name, db, current_user)
@@ -639,54 +645,18 @@ def list_generated_project_files(
     }
 
 
-@router.get("/generated/{project_name}/files/{filename:path}/word-text")
-def read_generated_project_file_as_word_text(
+@router.get(
+    "/generated/{project_name}/files/{filename:path}",
+    response_model=GeneratedProjectFileContentResponse,
+)
+def get_generated_project_file_content(
     project_name: str,
     filename: str,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
     """
-    Lê um arquivo gerado e retorna uma versão em texto limpo,
-    adequada para copiar e colar no Word,
-    desde que o projeto pertença ao usuário autenticado.
-    """
-
-    _require_project_owner(project_name, db, current_user)
-
-    file_path = _safe_file_path(project_name, filename)
-    content = _read_text_file(file_path)
-
-    # Se o conteúdo for JSON, tenta converter em texto limpo.
-    try:
-        parsed = json.loads(content)
-
-        if isinstance(parsed, dict):
-            clean_text = _dict_to_clean_text(parsed)
-        else:
-            clean_text = json.dumps(parsed, ensure_ascii=False, indent=2)
-
-    except json.JSONDecodeError:
-        clean_text = _markdown_to_word_text(content)
-
-    return {
-        "project_name": project_name,
-        "filename": filename,
-        "content": clean_text,
-        "size_bytes": len(clean_text.encode("utf-8")),
-    }
-
-
-@router.get("/generated/{project_name}/files/{filename:path}", response_model=GeneratedProjectFileContentResponse)
-def read_generated_project_file(
-    project_name: str,
-    filename: str,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
-):
-    """
-    Lê o conteúdo de um arquivo de um projeto gerado,
-    desde que ele pertença ao usuário autenticado.
+    Retorna o conteúdo textual de um arquivo gerado.
     """
 
     _require_project_owner(project_name, db, current_user)
@@ -702,52 +672,86 @@ def read_generated_project_file(
     }
 
 
-# ============================================================
-# Download ZIP protegido
-# ============================================================
+@router.get("/generated/{project_name}/files/{filename:path}/word-text")
+def get_generated_project_file_word_text(
+    project_name: str,
+    filename: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """
+    Retorna o conteúdo do arquivo em texto limpo, mais adequado para colar no Word.
+    """
 
-@router.get("/generated/{project_name}/download-zip")
+    _require_project_owner(project_name, db, current_user)
+
+    file_path = _safe_file_path(project_name, filename)
+    content = _read_text_file(file_path)
+    clean_text = _markdown_to_word_text(content)
+
+    return PlainTextResponse(clean_text)
+
+
+@router.get("/generated/{project_name}/download")
 def download_generated_project_zip(
     project_name: str,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
     """
-    Gera e baixa um arquivo ZIP contendo todos os arquivos
-    de um projeto gerado, desde que pertença ao usuário autenticado.
+    Gera e baixa um ZIP do projeto gerado.
     """
 
     _require_project_owner(project_name, db, current_user)
 
     project_dir = _safe_project_dir(project_name)
 
-    zip_temp = tempfile.NamedTemporaryFile(delete=False, suffix=".zip")
-    zip_path = zip_temp.name
-    zip_temp.close()
+    temp_file = tempfile.NamedTemporaryFile(
+        suffix=".zip",
+        delete=False,
+    )
+    temp_file_path = Path(temp_file.name)
+    temp_file.close()
 
-    try:
-        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zip_file:
-            for file_path in project_dir.rglob("*"):
-                if file_path.is_file():
-                    arcname = file_path.relative_to(project_dir)
-                    zip_file.write(file_path, arcname=str(arcname))
+    with zipfile.ZipFile(temp_file_path, "w", zipfile.ZIP_DEFLATED) as zip_file:
+        for path in project_dir.rglob("*"):
+            if path.is_file():
+                zip_file.write(
+                    path,
+                    arcname=str(path.relative_to(project_dir)),
+                )
 
-        download_filename = f"{project_name}.zip"
+    def cleanup():
+        try:
+            os.remove(temp_file_path)
+        except FileNotFoundError:
+            pass
 
-        return FileResponse(
-            path=zip_path,
-            media_type="application/zip",
-            filename=download_filename,
-            background=BackgroundTask(
-                lambda: os.remove(zip_path) if os.path.exists(zip_path) else None
-            ),
-        )
+    return FileResponse(
+        path=temp_file_path,
+        filename=f"{project_name}.zip",
+        media_type="application/zip",
+        background=BackgroundTask(cleanup),
+    )
 
-    except Exception as e:
-        if os.path.exists(zip_path):
-            os.remove(zip_path)
 
-        raise HTTPException(
-            status_code=500,
-            detail=f"Erro ao gerar ZIP do projeto: {str(e)}",
-        )
+@router.get("/generated/{project_name}/files/{filename:path}/download")
+def download_generated_project_file(
+    project_name: str,
+    filename: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """
+    Baixa um arquivo individual do projeto gerado.
+    """
+
+    _require_project_owner(project_name, db, current_user)
+
+    file_path = _safe_file_path(project_name, filename)
+
+    return FileResponse(
+        path=file_path,
+        filename=Path(filename).name,
+        media_type="application/octet-stream",
+    )

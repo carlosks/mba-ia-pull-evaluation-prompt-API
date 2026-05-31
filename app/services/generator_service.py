@@ -97,6 +97,12 @@ O JSON deve seguir exatamente esta estrutura:
     "Passo 2 da solução",
     "Passo 3 da solução"
   ],
+  "test_cases": [
+    "Deve validar o comportamento principal descrito no bug.",
+    "Deve impedir que o erro volte a ocorrer.",
+    "Deve validar entradas inválidas ou incompletas.",
+    "Deve confirmar que os dados esperados foram persistidos ou retornados corretamente."
+  ],
   "files": {{
     "main.py": "conteúdo completo do arquivo main.py",
     "README.md": "conteúdo completo do README.md",
@@ -135,8 +141,10 @@ REGRAS OBRIGATÓRIAS:
 - Para fornecedores, valide se endereço e contatos foram recebidos.
 - Para fornecedores, o CNPJ deve ser validado.
 - Para fornecedores, não permita cadastro duplicado do mesmo CNPJ.
-- Não use dependências além de fastapi, uvicorn e pydantic.
 - O README.md deve explicar como executar e testar a API.
+- Gere sempre o campo test_cases com pelo menos 4 casos de teste funcionais.
+- Cada caso de teste deve ser escrito em linguagem clara, começando com "Deve".
+- Para bugs de fornecedores, os casos de teste devem cobrir cadastro, consulta, duplicidade, CNPJ inválido e persistência.
 - O requirements.txt deve conter exatamente:
 fastapi
 uvicorn
@@ -331,6 +339,26 @@ def is_supplier_bug(bug: str) -> bool:
     ]
 
     return any(term in text for term in supplier_terms)
+
+
+def generate_fallback_test_cases(bug: str) -> List[str]:
+    if is_supplier_bug(bug):
+        return [
+            "Deve cadastrar fornecedor com CNPJ válido, razão social, endereço e contatos.",
+            "Deve retornar o fornecedor completo ao consultar pelo CNPJ cadastrado.",
+            "Deve impedir cadastro duplicado para o mesmo CNPJ.",
+            "Deve rejeitar CNPJ inválido.",
+            "Deve manter endereço e contatos persistidos após reiniciar a API.",
+            "Deve permitir atualizar endereço e contatos do fornecedor pelo CNPJ.",
+            "Deve permitir excluir fornecedor pelo CNPJ e retornar 404 em consulta posterior.",
+        ]
+
+    return [
+        "Deve reproduzir o cenário descrito no bug.",
+        "Deve validar que o comportamento corrigido retorna o resultado esperado.",
+        "Deve validar entradas inválidas ou incompletas.",
+        "Deve garantir que o erro original não volte a ocorrer.",
+    ]
 
 
 def build_supplier_api_main_py() -> str:
@@ -746,6 +774,7 @@ def relatorio_respostas_fornecedor(
     }
 '''
 
+
 def generate_supplier_readme_sqlite(bug: str) -> str:
     """
     Gera README.md completo para projetos de fornecedores com SQLite.
@@ -829,110 +858,15 @@ def generate_supplier_readme_sqlite(bug: str) -> str:
         "GET    /relatorioRespostasFornecedor",
         "```",
         "",
-        "## Teste 1 — Verificar saúde da API",
+        "## Testes principais",
         "",
-        "Endpoint:",
-        "",
-        "```text",
-        "GET /health",
-        "```",
-        "",
-        "Resposta esperada:",
-        "",
-        "```json",
-        "{",
-        '  "status": "ok",',
-        '  "database": "fornecedores.db"',
-        "}",
-        "```",
-        "",
-        "## Teste 2 — Cadastrar fornecedor",
-        "",
-        "Endpoint:",
-        "",
-        "```text",
-        "POST /fornecedores",
-        "```",
-        "",
-        "Payload:",
-        "",
-        "```json",
-        "{",
-        '  "razao_social": "3B-DOCTOR COMERCIO DE PRODUTOS MEDICOS LTDA",',
-        '  "cnpj": "04601824000178",',
-        '  "endereco": "Rua Exemplo, 100, Centro, Porto Alegre, RS, CEP 90000000",',
-        '  "contatos": [',
-        '    "Responsável - contato@exemplo.com - 51999999999"',
-        "  ]",
-        "}",
-        "```",
-        "",
-        "Resposta esperada: a API deve retornar o fornecedor cadastrado com razão social, CNPJ, endereço e contatos.",
-        "",
-        "## Teste 3 — Consultar fornecedor por CNPJ",
-        "",
-        "```text",
-        "GET /fornecedores/cnpj/04601824000178",
-        "```",
-        "",
-        "Resposta esperada: a API deve retornar o fornecedor completo.",
-        "",
-        "## Teste 4 — Bloqueio de duplicidade",
-        "",
-        "Execute novamente o mesmo POST /fornecedores usando o mesmo CNPJ.",
-        "",
-        "Resultado esperado:",
-        "",
-        "```text",
-        "409 Conflict",
-        "```",
-        "",
-        "## Teste 5 — CNPJ inválido",
-        "",
-        "Use este CNPJ:",
-        "",
-        "```text",
-        "11111111111111",
-        "```",
-        "",
-        "Resultado esperado:",
-        "",
-        "```text",
-        "422 Unprocessable Entity",
-        "```",
-        "",
-        "## Teste 6 — Persistência SQLite",
-        "",
-        "1. Cadastre o fornecedor.",
-        "2. Consulte por CNPJ.",
-        "3. Pare a API com CTRL + C.",
-        "4. Suba novamente:",
-        "",
-        "```bash",
-        "python -m uvicorn main:app --reload --port 8004",
-        "```",
-        "",
-        "5. Consulte novamente:",
-        "",
-        "```text",
-        "GET /fornecedores/cnpj/04601824000178",
-        "```",
-        "",
-        "Se o fornecedor continuar aparecendo, a persistência SQLite está funcionando.",
-        "",
-        "## Teste 7 — Atualizar fornecedor",
-        "",
-        "```text",
-        "PUT /fornecedores/cnpj/04601824000178",
-        "```",
-        "",
-        "## Teste 8 — Excluir fornecedor",
-        "",
-        "```text",
-        "DELETE /fornecedores/cnpj/04601824000178",
-        "```",
-        "",
-        "Após excluir, a consulta por CNPJ deve retornar 404 Not Found.",
+        "- Deve cadastrar fornecedor com CNPJ válido.",
+        "- Deve consultar fornecedor por CNPJ.",
+        "- Deve bloquear cadastro duplicado.",
+        "- Deve rejeitar CNPJ inválido.",
+        "- Deve persistir dados após reiniciar a API.",
+        "- Deve atualizar fornecedor por CNPJ.",
+        "- Deve excluir fornecedor por CNPJ.",
         "",
         "## Observação",
         "",
@@ -943,6 +877,7 @@ def generate_supplier_readme_sqlite(bug: str) -> str:
     ]
 
     return "\n".join(lines)
+
 
 def build_supplier_api_tests_py() -> str:
     """
@@ -1105,6 +1040,7 @@ def test_persistencia_sqlite_apos_nova_conexao(client):
     assert response.json()["cnpj"] == payload["cnpj"]
 '''
 
+
 def ensure_files(files: Any, bug: str) -> Dict[str, str]:
     if not isinstance(files, dict):
         files = {}
@@ -1189,6 +1125,11 @@ def generate_solution_project(bug: str) -> Dict[str, Any]:
     acceptance_criteria = ensure_list(data.get("acceptance_criteria", []))
     technical_analysis = str(data.get("technical_analysis", "")).strip()
     solution_plan = ensure_list(data.get("solution_plan", []))
+    test_cases = ensure_list(data.get("test_cases", []))
+
+    if not test_cases:
+        test_cases = ensure_list(data.get("tests", []))
+
     files = ensure_files(data.get("files", {}), bug)
 
     if is_supplier_bug(bug):
@@ -1227,6 +1168,9 @@ def generate_solution_project(bug: str) -> Dict[str, Any]:
                 "Testar cadastro, consulta, duplicidade, CNPJ inválido e persistência após reinício.",
             ]
 
+        if not test_cases:
+            test_cases = generate_fallback_test_cases(bug)
+
     if not user_story:
         fallback = generate_all(bug)
         user_story = fallback.get("user_story", "")
@@ -1246,10 +1190,14 @@ def generate_solution_project(bug: str) -> Dict[str, Any]:
             "Testar o comportamento com payloads válidos e inválidos.",
         ]
 
+    if not test_cases:
+        test_cases = generate_fallback_test_cases(bug)
+
     return {
         "user_story": user_story,
         "acceptance_criteria": acceptance_criteria,
         "technical_analysis": technical_analysis,
         "solution_plan": solution_plan,
+        "test_cases": test_cases,
         "files": files,
     }
