@@ -5,6 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from app.routes.admin import router as admin_router
 from app.routes.auth import router as auth_router
 from app.routes.projects import router as projects_router
+from app.services.migration_service import run_startup_migrations
 
 
 app = FastAPI(
@@ -15,6 +16,11 @@ app = FastAPI(
     ),
     version="1.0.0",
 )
+
+
+@app.on_event("startup")
+def startup_event():
+    run_startup_migrations()
 
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
