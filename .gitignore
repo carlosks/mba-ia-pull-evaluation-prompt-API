@@ -1,4 +1,5 @@
 .env
+app.db
 venv/
 .venv/
 __pycache__/
