@@ -844,11 +844,119 @@ def generate_dynamic_readme_objective(bug: str) -> str:
     )
 
 
+
+def generate_dynamic_readme_solution_items(bug: str) -> List[str]:
+    """
+    Gera a lista 'A solução implementa' conforme o tipo de BUG.
+    A ordem das regras é importante: casos mais específicos devem vir antes
+    de regras genéricas como fornecedor/CNPJ.
+    """
+
+    text = (bug or "").lower()
+
+    if (
+        "anexar" in text
+        or "anexo" in text
+        or "arquivo" in text
+        or "pdf" in text
+        or "upload" in text
+        or "documento" in text
+    ):
+        return [
+            "Recebimento e validação de arquivos enviados pelo usuário",
+            "Persistência do arquivo anexado no armazenamento local da aplicação",
+            "Vinculação do anexo ao cadastro correspondente",
+            "Consulta posterior dos anexos associados ao registro",
+            "Tratamento de erro para arquivos ausentes, inválidos ou não persistidos",
+            "Testes automatizados para validar upload, consulta e persistência do anexo",
+        ]
+
+    if "login" in text or "logar" in text or "usuário não encontrado" in text or "senha" in text:
+        return [
+            "Validação de usuário cadastrado e ativo",
+            "Verificação segura de senha",
+            "Geração de token de autenticação",
+            "Tratamento de erro para usuário inexistente, inativo ou senha inválida",
+            "Endpoint protegido para validar o usuário autenticado",
+            "Testes automatizados para login com sucesso e falhas de autenticação",
+        ]
+
+    if "download" in text or "zip" in text or "baixar" in text:
+        return [
+            "Localização segura dos arquivos do projeto gerado",
+            "Geração de pacote ZIP para download",
+            "Download individual de arquivos gerados",
+            "Tratamento de erro para projeto ou arquivo inexistente",
+            "Proteção contra acesso indevido a caminhos fora do projeto",
+            "Testes automatizados para download de ZIP e arquivos individuais",
+        ]
+
+    if "texto word" in text or "word" in text or "markdown" in text:
+        return [
+            "Leitura do conteúdo dos arquivos gerados",
+            "Conversão de Markdown para texto limpo",
+            "Remoção de marcações desnecessárias para uso no Word",
+            "Endpoint para retorno de texto em formato simples",
+            "Tratamento de erro para arquivos inexistentes ou inválidos",
+            "Testes automatizados para validar a conversão do conteúdo",
+        ]
+
+    if "histórico" in text or "historico" in text or "meus projetos" in text or "projetos" in text:
+        return [
+            "Registro do projeto gerado no histórico do usuário",
+            "Listagem dos projetos na tela Meus Projetos",
+            "Busca por nome, bug ou status do projeto",
+            "Acesso aos arquivos gerados de cada projeto",
+            "Download do projeto em formato ZIP",
+            "Testes automatizados para validar listagem, busca e ações do projeto",
+        ]
+
+    if "limite mensal" in text or "plano free" in text or "uso mensal" in text or "geração" in text:
+        return [
+            "Controle de limite mensal por plano de usuário",
+            "Contabilização das gerações realizadas no mês corrente",
+            "Bloqueio de novas gerações ao atingir o limite",
+            "Exibição de uso, limite e saldo restante no dashboard",
+            "Tratamento de exceções para planos inválidos ou usuários inativos",
+            "Testes automatizados para validar limite, bloqueio e saldo mensal",
+        ]
+
+    if "duplicado" in text or "duplicidade" in text:
+        return [
+            "Validação de existência prévia do registro",
+            "Bloqueio de cadastro duplicado pela chave principal",
+            "Mensagem de erro apropriada para duplicidade",
+            "Consulta segura do registro existente",
+            "Preservação da integridade dos dados persistidos",
+            "Testes automatizados para validar cadastro único e tentativa duplicada",
+        ]
+
+    if "fornecedor" in text or "cnpj" in text or "endereço" in text or "endereco" in text or "contatos" in text:
+        return [
+            "Cadastro de fornecedor com CNPJ válido",
+            "Persistência dos dados em banco SQLite",
+            "Consulta de fornecedor por CNPJ",
+            "Validação real dos dígitos verificadores do CNPJ",
+            "Bloqueio de cadastro duplicado do mesmo CNPJ",
+            "Atualização e exclusão de fornecedor",
+            "Consulta simulada de relatório de respostas do fornecedor",
+        ]
+
+    return [
+        "Correção do fluxo afetado pelo bug informado",
+        "Validação das entradas recebidas pela API",
+        "Persistência ou consulta dos dados necessários ao cenário",
+        "Tratamento de erros esperados",
+        "Retorno de respostas claras para sucesso e falha",
+        "Testes automatizados para validar o comportamento corrigido",
+    ]
+
 def generate_supplier_readme_sqlite(bug: str) -> str:
     """
     Gera README.md completo para projetos de fornecedores com SQLite.
     """
     objective = generate_dynamic_readme_objective(bug)
+    solution_items = generate_dynamic_readme_solution_items(bug)
 
     lines = [
         "# API de Fornecedores com SQLite",
@@ -865,13 +973,7 @@ def generate_supplier_readme_sqlite(bug: str) -> str:
         "",
         "A solução implementa:",
         "",
-        "- Cadastro de fornecedor com CNPJ válido",
-        "- Persistência dos dados em banco SQLite",
-        "- Consulta de fornecedor por CNPJ",
-        "- Validação real dos dígitos verificadores do CNPJ",
-        "- Bloqueio de cadastro duplicado do mesmo CNPJ",
-        "- Atualização e exclusão de fornecedor",
-        "- Consulta simulada de relatório de respostas do fornecedor",
+        *[f"- {item}" for item in solution_items],
         "",
         "## Tecnologias utilizadas",
         "",
