@@ -1,0 +1,61 @@
+cat > app/static/projects.html <<'HTML'
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MBA IA - Meus Projetos</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>MBA IA - Bug Evaluation</h1>
+      <p>Meus projetos gerados</p>
+    </div>
+
+    <nav>
+      <a href="/static/dashboard.html">Dashboard</a>
+      <a href="/docs">Swagger</a>
+      <a id="adminLink" href="/static/admin.html" class="hidden">Admin</a>
+      <button onclick="logout()">Sair</button>
+    </nav>
+  </header>
+
+  <main class="container">
+    <section class="card">
+      <div class="section-header">
+        <div>
+          <h2>Meus Projetos</h2>
+          <p class="muted">
+            Consulte os projetos gerados, visualize arquivos, baixe conteúdos e exporte ZIPs.
+          </p>
+        </div>
+
+        <button onclick="loadProjectsPage()">Atualizar projetos</button>
+      </div>
+
+      <div class="filters-row">
+        <label for="projectSearch">Buscar projeto</label>
+        <input
+          id="projectSearch"
+          type="text"
+          placeholder="Buscar por nome, bug ou status..."
+          oninput="filterProjectsPage()"
+        />
+      </div>
+
+      <div id="projectsPageMessage" class="message"></div>
+      <div id="projectsPageList" class="list"></div>
+    </section>
+  </main>
+
+  <script src="/static/app.js?v=7.9"></script>
+  <script>
+    requireAuth();
+    loadDashboard();
+    loadProjectsPage();
+  </script>
+</body>
+</html>
+HTML

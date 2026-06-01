@@ -792,6 +792,144 @@ async function toggleUserAdmin(userId, isAdmin) {
   }
 }
 
+
+let projectsPageCache = [];
+
+async function loadProjectsPage() {
+  const projectsPageList = document.getElementById("projectsPageList");
+  const projectsPageMessage = document.getElementById("projectsPageMessage");
+
+  if (!projectsPageList) {
+    return;
+  }
+
+  if (projectsPageMessage) {
+    projectsPageMessage.textContent = "";
+    projectsPageMessage.className = "message";
+  }
+
+  projectsPageList.innerHTML = `
+    <div class="history-loading">
+      <p>Carregando projetos...</p>
+    </div>
+  `;
+
+  try {
+    const data = await apiGet("/projects/history");
+    projectsPageCache = data.projects || [];
+
+    renderProjectsPage(projectsPageCache);
+
+  } catch (error) {
+    projectsPageList.innerHTML = `
+      <div class="empty-state error-state">
+        <h3>Erro ao carregar projetos</h3>
+        <p>${escapeHtml(error.message)}</p>
+      </div>
+    `;
+  }
+}
+
+function filterProjectsPage() {
+  const searchInput = document.getElementById("projectSearch");
+  const term = searchInput ? searchInput.value.trim().toLowerCase() : "";
+
+  if (!term) {
+    renderProjectsPage(projectsPageCache);
+    return;
+  }
+
+  const filteredProjects = projectsPageCache.filter(project => {
+    const projectName = String(project.project_name || "").toLowerCase();
+    const bug = String(project.bug || "").toLowerCase();
+    const status = String(project.status || "").toLowerCase();
+
+    return (
+      projectName.includes(term) ||
+      bug.includes(term) ||
+      status.includes(term)
+    );
+  });
+
+  renderProjectsPage(filteredProjects);
+}
+
+function renderProjectsPage(projects) {
+  const projectsPageList = document.getElementById("projectsPageList");
+
+  if (!projectsPageList) {
+    return;
+  }
+
+  if (!projects || projects.length === 0) {
+    projectsPageList.innerHTML = `
+      <div class="empty-state">
+        <h3>Nenhum projeto encontrado</h3>
+        <p>Gere uma solução técnica no dashboard para que ela apareça aqui.</p>
+      </div>
+    `;
+    return;
+  }
+
+  projectsPageList.innerHTML = projects.map(project => {
+    const projectName = project.project_name || "";
+    const displayName = projectName || "Projeto sem nome";
+    const status = project.status || "-";
+    const createdAt = formatDateTime(project.created_at);
+    const bug = project.bug || "-";
+    const shortBug = bug.length > 260 ? `${bug.substring(0, 260)}...` : bug;
+    const safeProjectName = escapeHtml(projectName);
+    const filesContainerId = `projectsPageFiles_${project.id}`;
+
+    return `
+      <article class="history-card project-page-card">
+        <div class="history-card-header">
+          <div>
+            <h3>${escapeHtml(displayName)}</h3>
+            <p class="muted small">ID: ${project.id || "-"}</p>
+          </div>
+          <span class="badge">${escapeHtml(status)}</span>
+        </div>
+
+        <div class="history-meta">
+          <span><strong>Criado em:</strong> ${escapeHtml(createdAt)}</span>
+        </div>
+
+        <p class="history-bug">
+          <strong>Bug:</strong> ${escapeHtml(shortBug)}
+        </p>
+
+        <div class="history-actions">
+          <button onclick="loadProjectFiles('${safeProjectName}', '${filesContainerId}')">
+            Ver arquivos
+          </button>
+
+          <button onclick="downloadProjectZip('${safeProjectName}')">
+            Baixar ZIP
+          </button>
+        </div>
+
+        <div id="${filesContainerId}" class="project-files-box hidden"></div>
+
+        <details class="history-details">
+          <summary>Ver detalhes</summary>
+          <div class="history-detail-content">
+            <p><strong>Nome do projeto:</strong></p>
+            <pre class="code-box">${escapeHtml(displayName)}</pre>
+
+            <p><strong>Descrição completa do bug:</strong></p>
+            <pre class="code-box">${escapeHtml(bug)}</pre>
+
+            <p><strong>Resposta bruta do histórico:</strong></p>
+            <pre class="code-box">${escapeHtml(JSON.stringify(project, null, 2))}</pre>
+          </div>
+        </details>
+      </article>
+    `;
+  }).join("");
+}
+
+
 document.addEventListener("DOMContentLoaded", () => {
   const loginForm = document.getElementById("loginForm");
   const registerForm = document.getElementById("registerForm");
