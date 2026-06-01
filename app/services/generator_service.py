@@ -774,11 +774,81 @@ def relatorio_respostas_fornecedor(
     }
 '''
 
+def generate_dynamic_readme_objective(bug: str) -> str:
+    """
+    Gera um objetivo específico para o README.md conforme o tipo de BUG.
+    A ordem das regras é importante: casos mais específicos devem vir antes
+    de regras genéricas como fornecedor/CNPJ.
+    """
+
+    text = (bug or "").lower()
+
+    if (
+        "anexar" in text
+        or "anexo" in text
+        or "arquivo" in text
+        or "pdf" in text
+        or "upload" in text
+        or "documento" in text
+    ):
+        return (
+            "Corrigir o fluxo de anexação de arquivos no cadastro para garantir que documentos enviados, "
+            "como PDFs, sejam armazenados corretamente e apareçam na consulta posterior do registro."
+        )
+
+    if "login" in text or "logar" in text or "usuário não encontrado" in text or "senha" in text:
+        return (
+            "Corrigir o fluxo de autenticação para garantir que usuários cadastrados, "
+            "ativos e com credenciais válidas consigam realizar login corretamente."
+        )
+
+    if "download" in text or "zip" in text or "baixar" in text:
+        return (
+            "Corrigir o fluxo de download de projetos gerados para garantir que arquivos "
+            "individuais e pacotes ZIP sejam localizados, criados e retornados corretamente ao usuário."
+        )
+
+    if "texto word" in text or "word" in text or "markdown" in text:
+        return (
+            "Corrigir a conversão de arquivos gerados para texto limpo, garantindo que o conteúdo "
+            "possa ser copiado para o Word sem marcações Markdown desnecessárias."
+        )
+
+    if "histórico" in text or "historico" in text or "meus projetos" in text or "projetos" in text:
+        return (
+            "Corrigir a listagem e a navegação de projetos gerados para garantir que soluções criadas "
+            "com sucesso apareçam corretamente na tela Meus Projetos."
+        )
+
+    if "limite mensal" in text or "plano free" in text or "uso mensal" in text or "geração" in text:
+        return (
+            "Corrigir o controle de uso mensal para garantir que os limites de geração de cada plano "
+            "sejam aplicados corretamente."
+        )
+
+    if "duplicado" in text or "duplicidade" in text:
+        return (
+            "Corrigir a validação de duplicidade para impedir que registros repetidos sejam salvos "
+            "quando já existir um cadastro com a mesma chave de identificação."
+        )
+
+    if "fornecedor" in text or "cnpj" in text or "endereço" in text or "endereco" in text or "contatos" in text:
+        return (
+            "Corrigir a persistência dos dados do fornecedor para garantir que CNPJ, razão social, "
+            "endereço e contatos sejam salvos, consultados e mantidos corretamente."
+        )
+
+    return (
+        "Corrigir o comportamento descrito no bug, garantindo que o fluxo afetado funcione conforme "
+        "o esperado e que o erro não volte a ocorrer."
+    )
+
 
 def generate_supplier_readme_sqlite(bug: str) -> str:
     """
     Gera README.md completo para projetos de fornecedores com SQLite.
     """
+    objective = generate_dynamic_readme_objective(bug)
 
     lines = [
         "# API de Fornecedores com SQLite",
@@ -791,7 +861,7 @@ def generate_supplier_readme_sqlite(bug: str) -> str:
         "",
         "## Objetivo",
         "",
-        "Esta API corrige um problema de cadastro de fornecedores em que os dados eram salvos parcialmente ou perdidos após reiniciar a aplicação.",
+        objective,
         "",
         "A solução implementa:",
         "",
