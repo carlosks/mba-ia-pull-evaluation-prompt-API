@@ -157,6 +157,78 @@ BUG:
 """)
 
 
+
+readme_prompt = ChatPromptTemplate.from_template("""
+Você é um arquiteto de software sênior e redator técnico.
+
+Sua tarefa é gerar um README.md profissional, claro e específico para o projeto gerado a partir de um BUG.
+
+Responda SOMENTE com o conteúdo do README.md em Markdown.
+Não use ```markdown.
+Não use explicações fora do README.
+
+O README deve ser específico para o BUG informado.
+Não use texto genérico.
+Não force o assunto para fornecedores se o BUG for sobre login, download, histórico, limite mensal, Word, upload ou outro fluxo.
+
+Inclua obrigatoriamente estas seções:
+
+# <Título específico do projeto>
+
+## Bug original
+
+## Objetivo
+
+## Solução implementada
+
+## Tecnologias utilizadas
+
+## Como executar
+
+## Como testar
+
+## Endpoints disponíveis
+
+## Casos de teste
+
+## Observações
+
+Contexto:
+
+BUG:
+{bug}
+
+USER STORY:
+{user_story}
+
+CRITÉRIOS DE ACEITAÇÃO:
+{acceptance_criteria}
+
+ANÁLISE TÉCNICA:
+{technical_analysis}
+
+PLANO DE SOLUÇÃO:
+{solution_plan}
+
+CASOS DE TESTE:
+{test_cases}
+
+ARQUIVOS GERADOS:
+{generated_files}
+
+REGRAS:
+- O título deve refletir o tipo de bug.
+- O objetivo deve ser específico para o bug.
+- A seção "Solução implementada" deve listar ações coerentes com o bug.
+- A seção "Endpoints disponíveis" deve refletir os endpoints do projeto gerado ou, se não for possível inferir, listar os endpoints esperados pelo fluxo.
+- A seção "Casos de teste" deve usar os casos de teste informados.
+- Se o bug for de upload/anexo/PDF, fale de anexação, persistência e consulta de arquivos.
+- Se o bug for de login, fale de autenticação, usuário ativo, senha e token.
+- Se o bug for de download ZIP, fale de geração, localização e retorno do ZIP.
+- Se o bug for de Meus Projetos/histórico, fale de listagem, busca e acesso aos arquivos.
+- Se o bug for de fornecedor/CNPJ, fale de cadastro, persistência, consulta e validação de fornecedor.
+""")
+
 def clean_user_story(text: str) -> str:
     if not text:
         return ""
@@ -1213,7 +1285,76 @@ def test_persistencia_sqlite_apos_nova_conexao(client):
 '''
 
 
-def ensure_files(files: Any, bug: str) -> Dict[str, str]:
+
+def generate_ai_readme(
+    bug: str,
+    user_story: str = "",
+    acceptance_criteria: Optional[List[str]] = None,
+    technical_analysis: str = "",
+    solution_plan: Optional[List[str]] = None,
+    test_cases: Optional[List[str]] = None,
+    generated_files: Optional[List[str]] = None,
+) -> str:
+    """
+    Gera README.md usando IA, com base no bug e na solução técnica.
+    """
+
+    acceptance_criteria = acceptance_criteria or []
+    solution_plan = solution_plan or []
+    test_cases = test_cases or []
+    generated_files = generated_files or []
+
+    chain = readme_prompt | get_llm()
+
+    response = chain.invoke(
+        {
+            "bug": bug,
+            "user_story": user_story or "-",
+            "acceptance_criteria": "\n".join(f"- {item}" for item in acceptance_criteria) or "-",
+            "technical_analysis": technical_analysis or "-",
+            "solution_plan": "\n".join(f"- {item}" for item in solution_plan) or "-",
+            "test_cases": "\n".join(f"- {item}" for item in test_cases) or "-",
+            "generated_files": "\n".join(f"- {item}" for item in generated_files) or "-",
+        }
+    )
+
+    content = response.content.strip()
+    content = content.replace("```markdown", "").replace("```", "").strip()
+
+    if not content or len(content) < 80:
+        raise ValueError("README gerado pela IA ficou vazio ou incompleto.")
+
+    required_sections = [
+        "## Bug original",
+        "## Objetivo",
+        "## Solução implementada",
+        "## Como executar",
+        "## Como testar",
+    ]
+
+    missing_sections = [
+        section
+        for section in required_sections
+        if section.lower() not in content.lower()
+    ]
+
+    if missing_sections:
+        raise ValueError(
+            "README gerado pela IA não contém seções obrigatórias: "
+            + ", ".join(missing_sections)
+        )
+
+    return content + "\n"
+
+def ensure_files(
+    files: Any,
+    bug: str,
+    user_story: str = "",
+    acceptance_criteria: Optional[List[str]] = None,
+    technical_analysis: str = "",
+    solution_plan: Optional[List[str]] = None,
+    test_cases: Optional[List[str]] = None,
+) -> Dict[str, str]:
     if not isinstance(files, dict):
         files = {}
 
@@ -1223,7 +1364,6 @@ def ensure_files(files: Any, bug: str) -> Dict[str, str]:
 
     if is_supplier_bug(bug):
         main_py = build_supplier_api_main_py()
-        readme_md = generate_supplier_readme_sqlite(bug)
         files["test_fornecedores.py"] = build_supplier_api_tests_py()
 
     if is_supplier_bug(bug):
@@ -1233,6 +1373,37 @@ def ensure_files(files: Any, bug: str) -> Dict[str, str]:
 
     if not main_py:
         main_py = generate_fallback_main_py()
+
+    generated_file_names = sorted(
+        {
+            *[str(filename) for filename in files.keys()],
+            "main.py",
+            "README.md",
+            "requirements.txt",
+        }
+    )
+
+    try:
+        ai_readme = generate_ai_readme(
+            bug=bug,
+            user_story=user_story,
+            acceptance_criteria=acceptance_criteria or [],
+            technical_analysis=technical_analysis,
+            solution_plan=solution_plan or [],
+            test_cases=test_cases or [],
+            generated_files=generated_file_names,
+        )
+
+        if ai_readme:
+            readme_md = ai_readme
+
+    except Exception:
+        if readme_md:
+            readme_md = str(readme_md)
+        elif is_supplier_bug(bug):
+            readme_md = generate_supplier_readme_sqlite(bug)
+        else:
+            readme_md = generate_fallback_readme(bug)
 
     if not readme_md:
         readme_md = generate_fallback_readme(bug)
@@ -1302,7 +1473,15 @@ def generate_solution_project(bug: str) -> Dict[str, Any]:
     if not test_cases:
         test_cases = ensure_list(data.get("tests", []))
 
-    files = ensure_files(data.get("files", {}), bug)
+    files = ensure_files(
+        data.get("files", {}),
+        bug,
+        user_story=user_story,
+        acceptance_criteria=acceptance_criteria,
+        technical_analysis=technical_analysis,
+        solution_plan=solution_plan,
+        test_cases=test_cases,
+    )
 
     if is_supplier_bug(bug):
         if not user_story:
