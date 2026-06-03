@@ -413,6 +413,32 @@ def is_supplier_bug(bug: str) -> bool:
     return any(term in text for term in supplier_terms)
 
 
+
+def is_upload_or_attachment_bug(bug: str) -> bool:
+    """
+    Identifica bugs cujo foco real é upload, anexo, arquivo ou PDF.
+    Esses bugs não devem ser sobrescritos pelo template fixo de fornecedor,
+    mesmo que mencionem fornecedor no texto.
+    """
+
+    if not bug:
+        return False
+
+    text = bug.lower()
+
+    upload_terms = [
+        "upload",
+        "anexo",
+        "anexar",
+        "anexado",
+        "arquivo",
+        "pdf",
+        "documento",
+        "documentos",
+    ]
+
+    return any(term in text for term in upload_terms)
+
 def generate_fallback_test_cases(bug: str) -> List[str]:
     if is_supplier_bug(bug):
         return [
@@ -1362,12 +1388,12 @@ def ensure_files(
     readme_md = files.get("README.md")
     requirements_txt = files.get("requirements.txt")
 
-    if is_supplier_bug(bug):
+    if is_supplier_bug(bug) and not is_upload_or_attachment_bug(bug):
         main_py = build_supplier_api_main_py()
         files["test_fornecedores.py"] = build_supplier_api_tests_py()
 
     if is_supplier_bug(bug):
-        requirements_txt = "fastapi\nuvicorn\npydantic\npytest\nhttpx\n"
+        requirements_txt = "fastapi\nuvicorn\npydantic\npytest\nhttpx\npython-multipart\n"
     elif not requirements_txt:
         requirements_txt = "fastapi\nuvicorn\npydantic\n"
 
