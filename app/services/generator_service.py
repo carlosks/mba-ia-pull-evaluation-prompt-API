@@ -1372,6 +1372,104 @@ def generate_ai_readme(
 
     return content + "\n"
 
+
+def validate_python_code(code: str, filename: str = "main.py") -> None:
+    """
+    Valida se o código Python compila.
+    Lança SyntaxError caso o código esteja inválido.
+    """
+
+    compile(code, filename, "exec")
+
+
+def repair_generated_python_code_with_ai(
+    bug: str,
+    code: str,
+    error: str,
+) -> str:
+    """
+    Solicita à IA a correção de um arquivo Python gerado.
+    A resposta deve ser exclusivamente código Python.
+    """
+
+    repair_prompt = ChatPromptTemplate.from_template("""
+Você é um desenvolvedor Python/FastAPI sênior.
+
+Corrija o arquivo main.py abaixo.
+
+Responda SOMENTE com o código Python completo corrigido.
+Não use markdown.
+Não use ```python.
+Não explique nada fora do código.
+
+O código corrigido deve:
+- Compilar sem SyntaxError.
+- Ser importável com: python -c "from main import app; print('OK')"
+- Manter a intenção do bug original.
+- Usar FastAPI.
+- Usar Pydantic v2 corretamente.
+- Usar field_validator somente dentro da classe Pydantic.
+- Se houver upload de arquivo, usar UploadFile e File corretamente.
+- Se salvar arquivos, criar a pasta antes com os.makedirs(..., exist_ok=True).
+- Evitar indentação inválida.
+
+BUG ORIGINAL:
+{bug}
+
+ERRO ENCONTRADO:
+{error}
+
+MAIN.PY COM ERRO:
+{code}
+""")
+
+    chain = repair_prompt | get_llm()
+
+    response = chain.invoke(
+        {
+            "bug": bug,
+            "error": error,
+            "code": code,
+        }
+    )
+
+    repaired = response.content.strip()
+    repaired = repaired.replace("```python", "").replace("```", "").strip()
+
+    return sanitize_generated_python_code(repaired)
+
+
+def validate_or_repair_generated_main_py(
+    main_py: str,
+    bug: str,
+    max_attempts: int = 2,
+) -> str:
+    """
+    Valida o main.py gerado pela IA.
+    Se houver erro de sintaxe, tenta corrigir usando a própria IA.
+    """
+
+    code = sanitize_generated_python_code(main_py)
+
+    for attempt in range(max_attempts + 1):
+        try:
+            validate_python_code(code)
+            return code
+        except SyntaxError as error:
+            if attempt >= max_attempts:
+                raise ValueError(
+                    "main.py gerado pela IA continuou inválido após tentativa de correção: "
+                    + str(error)
+                )
+
+            code = repair_generated_python_code_with_ai(
+                bug=bug,
+                code=code,
+                error=str(error),
+            )
+
+    return code
+
 def ensure_files(
     files: Any,
     bug: str,
@@ -1437,7 +1535,10 @@ def ensure_files(
     if not requirements_txt:
         requirements_txt = "fastapi\nuvicorn\npydantic\n"
 
-    files["main.py"] = sanitize_generated_python_code(str(main_py))
+    files["main.py"] = validate_or_repair_generated_main_py(
+        sanitize_generated_python_code(str(main_py)),
+        bug,
+    )
     files["README.md"] = str(readme_md)
     files["requirements.txt"] = str(requirements_txt)
 
