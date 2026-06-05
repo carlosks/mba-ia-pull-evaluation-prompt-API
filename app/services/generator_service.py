@@ -240,6 +240,13 @@ REGRAS:
 - Se o bug for de download ZIP, fale de geração, localização e retorno do ZIP.
 - Se o bug for de Meus Projetos/histórico, fale de listagem, busca e acesso aos arquivos.
 - Se o bug for de fornecedor/CNPJ, fale de cadastro, persistência, consulta e validação de fornecedor.
+- Na seção "Como executar", oriente sempre a executar o projeto gerado com:
+  python -m uvicorn main:app --reload --port 8004
+- Na seção "Como executar" ou "Como acessar", use sempre:
+  http://127.0.0.1:8004/docs
+- Não use localhost:8000.
+- Não use a porta 8002 no README do projeto gerado, pois a porta 8002 é usada pela API principal.
+- Quando mencionar Swagger ou documentação interativa, use http://127.0.0.1:8004/docs.
 """)
 
 def clean_user_story(text: str) -> str:
