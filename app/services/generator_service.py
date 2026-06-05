@@ -216,8 +216,21 @@ CASOS DE TESTE:
 ARQUIVOS GERADOS:
 {generated_files}
 
+TECNOLOGIAS REAIS INFERIDAS DOS ARQUIVOS:
+{generated_technologies}
+
+CONTEÚDO DO requirements.txt GERADO:
+{requirements_txt_content}
+
+TRECHO DO main.py GERADO:
+{main_py_content}
+
 REGRAS:
 - O título deve refletir o tipo de bug.
+- A seção "Tecnologias utilizadas" deve usar SOMENTE as tecnologias reais inferidas dos arquivos.
+- Não mencione Flask, Django, SQLAlchemy, PostgreSQL, MySQL ou outras tecnologias se elas não aparecerem no main.py ou requirements.txt.
+- Se o main.py usa FastAPI, a seção "Tecnologias utilizadas" deve citar FastAPI, não Flask.
+- Se o código usa sqlite3 ou SQLite, não cite SQLAlchemy a menos que SQLAlchemy apareça explicitamente nos arquivos gerados.
 - O objetivo deve ser específico para o bug.
 - A seção "Solução implementada" deve listar ações coerentes com o bug.
 - A seção "Endpoints disponíveis" deve refletir os endpoints do projeto gerado ou, se não for possível inferir, listar os endpoints esperados pelo fluxo.
@@ -1312,6 +1325,50 @@ def test_persistencia_sqlite_apos_nova_conexao(client):
 
 
 
+
+def infer_generated_technologies(
+    main_py: str = "",
+    requirements_txt: str = "",
+) -> List[str]:
+    """
+    Infere tecnologias reais a partir do main.py e requirements.txt gerados.
+    """
+
+    content = f"{main_py}\n{requirements_txt}".lower()
+    technologies = []
+
+    if "fastapi" in content:
+        technologies.append("FastAPI")
+
+    if "uvicorn" in content:
+        technologies.append("Uvicorn")
+
+    if "pydantic" in content or "basemodel" in content:
+        technologies.append("Pydantic")
+
+    if "sqlite3" in content or "sqlite" in content:
+        technologies.append("SQLite")
+
+    if "uploadfile" in content or "python-multipart" in content or "file(" in content:
+        technologies.append("python-multipart")
+
+    if "pytest" in content:
+        technologies.append("pytest")
+
+    if "httpx" in content:
+        technologies.append("httpx")
+
+    if "openai" in content:
+        technologies.append("OpenAI")
+
+    if "langchain" in content:
+        technologies.append("LangChain")
+
+    if "Python" not in technologies:
+        technologies.insert(0, "Python")
+
+    return technologies
+
 def generate_ai_readme(
     bug: str,
     user_story: str = "",
@@ -1320,6 +1377,9 @@ def generate_ai_readme(
     solution_plan: Optional[List[str]] = None,
     test_cases: Optional[List[str]] = None,
     generated_files: Optional[List[str]] = None,
+    generated_technologies: Optional[List[str]] = None,
+    main_py_content: str = "",
+    requirements_txt_content: str = "",
 ) -> str:
     """
     Gera README.md usando IA, com base no bug e na solução técnica.
@@ -1329,6 +1389,7 @@ def generate_ai_readme(
     solution_plan = solution_plan or []
     test_cases = test_cases or []
     generated_files = generated_files or []
+    generated_technologies = generated_technologies or []
 
     chain = readme_prompt | get_llm()
 
@@ -1341,6 +1402,9 @@ def generate_ai_readme(
             "solution_plan": "\n".join(f"- {item}" for item in solution_plan) or "-",
             "test_cases": "\n".join(f"- {item}" for item in test_cases) or "-",
             "generated_files": "\n".join(f"- {item}" for item in generated_files) or "-",
+            "generated_technologies": "\n".join(f"- {item}" for item in generated_technologies) or "-",
+            "main_py_content": main_py_content[:6000] or "-",
+            "requirements_txt_content": requirements_txt_content or "-",
         }
     )
 
@@ -1507,6 +1571,11 @@ def ensure_files(
         }
     )
 
+    generated_technologies = infer_generated_technologies(
+        main_py=str(main_py or ""),
+        requirements_txt=str(requirements_txt or ""),
+    )
+
     try:
         ai_readme = generate_ai_readme(
             bug=bug,
@@ -1516,6 +1585,9 @@ def ensure_files(
             solution_plan=solution_plan or [],
             test_cases=test_cases or [],
             generated_files=generated_file_names,
+            generated_technologies=generated_technologies,
+            main_py_content=str(main_py or ""),
+            requirements_txt_content=str(requirements_txt or ""),
         )
 
         if ai_readme:
