@@ -687,6 +687,80 @@ def build_solution_readme(
     return "\n".join(lines)
 
 
+
+def validate_generated_project_files(files: Dict[str, str]) -> Dict[str, Any]:
+    """
+    Valida os arquivos principais de um projeto gerado antes da gravação do metadata.json.
+    """
+    errors = []
+    checks = {}
+
+    main_py = files.get("main.py", "")
+    readme = files.get("README.md", "")
+    requirements = files.get("requirements.txt", "")
+
+    checks["main_py_exists"] = bool(main_py and main_py.strip())
+    checks["readme_exists"] = bool(readme and readme.strip())
+    checks["requirements_exists"] = bool(requirements and requirements.strip())
+    checks["requirements_not_empty"] = bool(requirements and requirements.strip())
+
+    if not checks["main_py_exists"]:
+        errors.append("Arquivo main.py não foi gerado ou está vazio.")
+
+    if not checks["readme_exists"]:
+        errors.append("Arquivo README.md não foi gerado ou está vazio.")
+
+    if not checks["requirements_exists"]:
+        errors.append("Arquivo requirements.txt não foi gerado ou está vazio.")
+
+    checks["main_py_compiles"] = False
+    if checks["main_py_exists"]:
+        try:
+            compile(main_py, "main.py", "exec")
+            checks["main_py_compiles"] = True
+        except SyntaxError as exc:
+            errors.append(f"main.py possui erro de sintaxe: {exc}")
+        except Exception as exc:
+            errors.append(f"Não foi possível validar a sintaxe do main.py: {exc}")
+
+    checks["app_declared"] = False
+    if checks["main_py_exists"]:
+        normalized_main = main_py.replace(" ", "")
+        checks["app_declared"] = (
+            "app=FastAPI(" in normalized_main
+            or "app:FastAPI=" in normalized_main
+            or "FastAPI(" in main_py
+        )
+
+        if not checks["app_declared"]:
+            errors.append("main.py não parece declarar uma aplicação FastAPI chamada app.")
+
+    required_dependencies = ["fastapi", "uvicorn", "pydantic"]
+    requirements_lower = requirements.lower()
+
+    missing_dependencies = [
+        dependency
+        for dependency in required_dependencies
+        if dependency not in requirements_lower
+    ]
+
+    checks["required_dependencies_present"] = len(missing_dependencies) == 0
+
+    if missing_dependencies:
+        errors.append(
+            "requirements.txt não contém dependências mínimas: "
+            + ", ".join(missing_dependencies)
+        )
+
+    status = "valid" if not errors and all(checks.values()) else "invalid"
+
+    return {
+        "status": status,
+        "checks": checks,
+        "errors": errors,
+    }
+
+
 def create_solution_project_files(
     bug: str,
     user_story: str,
@@ -774,6 +848,8 @@ def create_solution_project_files(
         "",
     ])
 
+    validation = validate_generated_project_files(normalized_files)
+
     metadata = {
         "project_name": project_name,
         "created_at": datetime.now().isoformat(),
@@ -784,6 +860,7 @@ def create_solution_project_files(
         "technical_analysis": technical_analysis,
         "solution_plan": solution_plan,
         "files": sorted(list(normalized_files.keys()) + ["metadata.json"]),
+        "validation": validation,
     }
 
     normalized_files["metadata.json"] = json.dumps(metadata, ensure_ascii=False, indent=2)
