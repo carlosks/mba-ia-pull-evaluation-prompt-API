@@ -101,6 +101,7 @@ class ProjectHistoryItem(BaseModel):
     bug: str
     status: Optional[str] = None
     created_at: str
+    validation: Optional[Dict[str, Any]] = None
 
 
 class ProjectHistoryResponse(BaseModel):
@@ -110,6 +111,35 @@ class ProjectHistoryResponse(BaseModel):
 # ============================================================
 # Funções auxiliares
 # ============================================================
+
+def _read_project_validation(project_name: str) -> Optional[Dict[str, Any]]:
+    """
+    Lê o campo validation do metadata.json do projeto gerado, quando existir.
+    """
+    if not project_name:
+        return None
+
+    try:
+        project_dir = GENERATED_PROJECTS_DIR / project_name
+        metadata_path = project_dir / "metadata.json"
+
+        if not metadata_path.exists() or not metadata_path.is_file():
+            return None
+
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        validation = metadata.get("validation")
+
+        if isinstance(validation, dict):
+            return validation
+
+        return None
+    except Exception:
+        return {
+            "status": "unavailable",
+            "checks": {},
+            "errors": ["Não foi possível ler a validação do metadata.json."],
+        }
+
 
 def _safe_project_dir(project_name: str) -> Path:
     """
@@ -566,6 +596,7 @@ def get_project_history(
                 created_at=project.created_at.isoformat()
                 if project.created_at
                 else "",
+                validation=_read_project_validation(project.zip_path or ""),
             )
             for project in projects
         ]

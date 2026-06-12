@@ -843,16 +843,64 @@ function filterProjectsPage() {
     const projectName = String(project.project_name || "").toLowerCase();
     const bug = String(project.bug || "").toLowerCase();
     const status = String(project.status || "").toLowerCase();
+    const validationStatus = String(project.validation?.status || "").toLowerCase();
 
     return (
       projectName.includes(term) ||
       bug.includes(term) ||
-      status.includes(term)
+      status.includes(term) ||
+      validationStatus.includes(term)
     );
   });
 
   renderProjectsPage(filteredProjects);
 }
+
+function formatValidationCheck(value) {
+  return value ? "OK" : "ERRO";
+}
+
+function renderProjectValidation(project) {
+  const validation = project.validation;
+
+  if (!validation) {
+    return `
+      <div class="history-meta">
+        <span><strong>Validação:</strong> não disponível</span>
+      </div>
+    `;
+  }
+
+  const checks = validation.checks || {};
+  const errors = validation.errors || [];
+  const validationStatus = validation.status || "unknown";
+
+  const errorHtml = errors.length
+    ? `
+      <div class="history-validation-errors">
+        <strong>Erros:</strong>
+        <ul>
+          ${errors.map(error => `<li>${escapeHtml(error)}</li>`).join("")}
+        </ul>
+      </div>
+    `
+    : "";
+
+  return `
+    <div class="history-validation">
+      <p><strong>Validação:</strong> <span class="badge">${escapeHtml(validationStatus)}</span></p>
+      <div class="history-meta">
+        <span><strong>main.py:</strong> ${formatValidationCheck(checks.main_py_compiles)}</span>
+        <span><strong>README.md:</strong> ${formatValidationCheck(checks.readme_exists)}</span>
+        <span><strong>requirements.txt:</strong> ${formatValidationCheck(checks.requirements_exists)}</span>
+        <span><strong>FastAPI app:</strong> ${formatValidationCheck(checks.app_declared)}</span>
+        <span><strong>Dependências:</strong> ${formatValidationCheck(checks.required_dependencies_present)}</span>
+      </div>
+      ${errorHtml}
+    </div>
+  `;
+}
+
 
 function renderProjectsPage(projects) {
   const projectsPageList = document.getElementById("projectsPageList");
@@ -898,6 +946,8 @@ function renderProjectsPage(projects) {
         <p class="history-bug">
           <strong>Bug:</strong> ${escapeHtml(shortBug)}
         </p>
+
+        ${renderProjectValidation(project)}
 
         <div class="history-actions">
           <button onclick="loadProjectFiles('${safeProjectName}', '${filesContainerId}')">
