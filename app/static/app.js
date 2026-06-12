@@ -196,6 +196,52 @@ async function safeJson(response) {
   }
 }
 
+function buildHttpErrorMessage(response, data) {
+  if (response.status === 401) {
+    return "Sessão expirada ou token inválido. Faça login novamente.";
+  }
+
+  if (response.status === 403) {
+    return "Você não tem permissão para executar esta ação.";
+  }
+
+  if (response.status >= 500) {
+    if (data && data.detail) {
+      return typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail);
+    }
+    return "Erro interno na API. Verifique o terminal do backend para mais detalhes.";
+  }
+
+  if (data && data.detail) {
+    return typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail);
+  }
+
+  return `Erro ${response.status}`;
+}
+
+function buildConnectionErrorMessage(path) {
+  return `Não foi possível conectar à API. Verifique se o backend está rodando em http://127.0.0.1:8002. Endpoint chamado: ${path}`;
+}
+
+function buildGenerateErrorMessage(error) {
+  const rawMessage = error && error.message ? error.message : "Erro desconhecido.";
+
+  if (
+    rawMessage === "Failed to fetch" ||
+    rawMessage.toLowerCase().includes("connection error") ||
+    rawMessage.toLowerCase().includes("não foi possível conectar")
+  ) {
+    return rawMessage;
+  }
+
+  if (rawMessage.toLowerCase().includes("token")) {
+    return `${rawMessage} Faça login novamente.`;
+  }
+
+  return rawMessage;
+}
+
+
 async function handleLogin(event) {
   event.preventDefault();
 
@@ -295,16 +341,22 @@ async function apiGet(path) {
 }
 
 async function apiPost(path, payload) {
-  const response = await fetch(`${API_BASE}${path}`, {
-    method: "POST",
-    headers: authHeaders(),
-    body: JSON.stringify(payload)
-  });
+  let response;
+
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify(payload)
+    });
+  } catch (error) {
+    throw new Error(buildConnectionErrorMessage(path));
+  }
 
   const data = await safeJson(response);
 
   if (!response.ok) {
-    throw new Error(data.detail || `Erro ${response.status}`);
+    throw new Error(buildHttpErrorMessage(response, data));
   }
 
   return data;
@@ -383,13 +435,13 @@ async function generateSolution() {
     await loadHistory();
 
   } catch (error) {
-    let message = error.message;
+    let message = buildGenerateErrorMessage(error);
 
     if (message.includes("Limite mensal")) {
       message = `${message} Faça upgrade do plano ou aguarde o próximo ciclo mensal.`;
     }
 
-    setMessage("generateMessage", message, "error");
+    setMessage("generateMessage", `Erro ao gerar solução técnica: ${message}`, "error");
   }
 }
 
