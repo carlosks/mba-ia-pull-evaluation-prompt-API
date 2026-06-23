@@ -926,6 +926,14 @@ function renderProjectValidation(project) {
   const checks = validation.checks || {};
   const errors = validation.errors || [];
   const validationStatus = validation.status || "unknown";
+  const requirementsImportStatus = Object.prototype.hasOwnProperty.call(checks, "requirements_match_imports")
+    ? formatValidationCheck(checks.requirements_match_imports)
+    : "não disponível";
+
+  const missingImportDependencies = validation.missing_import_dependencies || [];
+  const missingImportDependenciesHtml = missingImportDependencies.length
+    ? `<span><strong>Dependências ausentes:</strong> ${escapeHtml(missingImportDependencies.join(", "))}</span>`
+    : "";
 
   const errorHtml = errors.length
     ? `
@@ -947,6 +955,8 @@ function renderProjectValidation(project) {
         <span><strong>requirements.txt:</strong> ${formatValidationCheck(checks.requirements_exists)}</span>
         <span><strong>FastAPI app:</strong> ${formatValidationCheck(checks.app_declared)}</span>
         <span><strong>Dependências:</strong> ${formatValidationCheck(checks.required_dependencies_present)}</span>
+        <span><strong>Requirements x imports:</strong> ${requirementsImportStatus}</span>
+        ${missingImportDependenciesHtml}
       </div>
       ${errorHtml}
     </div>
