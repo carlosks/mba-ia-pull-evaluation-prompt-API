@@ -737,6 +737,7 @@ def validate_generated_project_files(files: Dict[str, str]) -> Dict[str, Any]:
 
     required_dependencies = ["fastapi", "uvicorn", "pydantic"]
     requirements_lower = requirements.lower()
+    main_py_lower = main_py.lower()
 
     missing_dependencies = [
         dependency
@@ -750,6 +751,46 @@ def validate_generated_project_files(files: Dict[str, str]) -> Dict[str, Any]:
         errors.append(
             "requirements.txt não contém dependências mínimas: "
             + ", ".join(missing_dependencies)
+        )
+
+    import_dependency_rules = {
+        "fastapi": [
+            "from fastapi",
+            "import fastapi",
+            "fastapi(",
+        ],
+        "pydantic": [
+            "from pydantic",
+            "import pydantic",
+            "basemodel",
+        ],
+        "uvicorn": [
+            "uvicorn",
+        ],
+        "python-multipart": [
+            "uploadfile",
+            "file(",
+        ],
+    }
+
+    detected_import_dependencies = []
+
+    for dependency, patterns in import_dependency_rules.items():
+        if any(pattern in main_py_lower for pattern in patterns):
+            detected_import_dependencies.append(dependency)
+
+    missing_import_dependencies = [
+        dependency
+        for dependency in detected_import_dependencies
+        if dependency not in requirements_lower
+    ]
+
+    checks["requirements_match_imports"] = len(missing_import_dependencies) == 0
+
+    if missing_import_dependencies:
+        errors.append(
+            "requirements.txt não contém dependências exigidas pelos imports/uso do main.py: "
+            + ", ".join(missing_import_dependencies)
         )
 
     status = "valid" if not errors and all(checks.values()) else "invalid"
