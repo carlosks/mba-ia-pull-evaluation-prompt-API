@@ -964,7 +964,73 @@ function renderProjectValidation(project) {
 }
 
 
+function renderProjectsValidationSummary(projects) {
+  const summaryBox = document.getElementById("projectsValidationSummary");
+
+  if (!summaryBox) {
+    return;
+  }
+
+  const total = projects ? projects.length : 0;
+
+  if (total === 0) {
+    summaryBox.innerHTML = "";
+    return;
+  }
+
+  let validCount = 0;
+  let invalidCount = 0;
+  let unavailableCount = 0;
+  let requirementsImportsOkCount = 0;
+  let requirementsImportsErrorCount = 0;
+  let requirementsImportsUnavailableCount = 0;
+
+  projects.forEach(project => {
+    const validation = project.validation;
+
+    if (!validation) {
+      unavailableCount += 1;
+      requirementsImportsUnavailableCount += 1;
+      return;
+    }
+
+    const validationStatus = validation.status || "unknown";
+    const checks = validation.checks || {};
+
+    if (validationStatus === "valid") {
+      validCount += 1;
+    } else {
+      invalidCount += 1;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(checks, "requirements_match_imports")) {
+      if (checks.requirements_match_imports) {
+        requirementsImportsOkCount += 1;
+      } else {
+        requirementsImportsErrorCount += 1;
+      }
+    } else {
+      requirementsImportsUnavailableCount += 1;
+    }
+  });
+
+  summaryBox.innerHTML = `
+    <p><strong>Resumo da validação</strong></p>
+    <div class="history-meta">
+      <span><strong>Projetos:</strong> ${total}</span>
+      <span><strong>Válidos:</strong> ${validCount}</span>
+      <span><strong>Inválidos:</strong> ${invalidCount}</span>
+      <span><strong>Sem validação:</strong> ${unavailableCount}</span>
+      <span><strong>Requirements x imports OK:</strong> ${requirementsImportsOkCount}</span>
+      <span><strong>Requirements x imports com erro:</strong> ${requirementsImportsErrorCount}</span>
+      <span><strong>Requirements x imports não disponível:</strong> ${requirementsImportsUnavailableCount}</span>
+    </div>
+  `;
+}
+
 function renderProjectsPage(projects) {
+  renderProjectsValidationSummary(projects);
+
   const projectsPageList = document.getElementById("projectsPageList");
 
   if (!projectsPageList) {
