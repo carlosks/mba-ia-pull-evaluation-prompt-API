@@ -45,6 +45,19 @@
       </div>
 
       <div id="projectsPageMessage" class="message"></div>
+      <div class="form-group">
+        <label for="projectValidationFilter"><strong>Filtrar por validação</strong></label>
+        <select id="projectValidationFilter" onchange="filterProjectsPage()">
+          <option value="all">Todos</option>
+          <option value="valid">Válidos</option>
+          <option value="invalid">Inválidos</option>
+          <option value="without_validation">Sem validação</option>
+          <option value="requirements_imports_ok">Requirements x imports OK</option>
+          <option value="requirements_imports_error">Requirements x imports com erro</option>
+          <option value="requirements_imports_unavailable">Requirements x imports não disponível</option>
+        </select>
+      </div>
+
       <div id="projectsValidationSummary" class="history-validation"></div>
       <div id="projectsPageList" class="list"></div>
     </section>

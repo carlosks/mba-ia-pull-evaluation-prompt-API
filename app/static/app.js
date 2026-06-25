@@ -882,14 +882,54 @@ async function loadProjectsPage() {
   }
 }
 
+function projectMatchesValidationFilter(project, validationFilter) {
+  if (!validationFilter || validationFilter === "all") {
+    return true;
+  }
+
+  const validation = project.validation;
+
+  if (validationFilter === "without_validation") {
+    return !validation;
+  }
+
+  if (!validation) {
+    return false;
+  }
+
+  const validationStatus = validation.status || "unknown";
+  const checks = validation.checks || {};
+  const hasRequirementsImportCheck = Object.prototype.hasOwnProperty.call(checks, "requirements_match_imports");
+
+  if (validationFilter === "valid") {
+    return validationStatus === "valid";
+  }
+
+  if (validationFilter === "invalid") {
+    return validationStatus !== "valid";
+  }
+
+  if (validationFilter === "requirements_imports_ok") {
+    return hasRequirementsImportCheck && checks.requirements_match_imports === true;
+  }
+
+  if (validationFilter === "requirements_imports_error") {
+    return hasRequirementsImportCheck && checks.requirements_match_imports === false;
+  }
+
+  if (validationFilter === "requirements_imports_unavailable") {
+    return !hasRequirementsImportCheck;
+  }
+
+  return true;
+}
+
 function filterProjectsPage() {
   const searchInput = document.getElementById("projectSearch");
-  const term = searchInput ? searchInput.value.trim().toLowerCase() : "";
+  const validationFilterInput = document.getElementById("projectValidationFilter");
 
-  if (!term) {
-    renderProjectsPage(projectsPageCache);
-    return;
-  }
+  const term = searchInput ? searchInput.value.trim().toLowerCase() : "";
+  const validationFilter = validationFilterInput ? validationFilterInput.value : "all";
 
   const filteredProjects = projectsPageCache.filter(project => {
     const projectName = String(project.project_name || "").toLowerCase();
@@ -897,12 +937,16 @@ function filterProjectsPage() {
     const status = String(project.status || "").toLowerCase();
     const validationStatus = String(project.validation?.status || "").toLowerCase();
 
-    return (
+    const textMatches = !term || (
       projectName.includes(term) ||
       bug.includes(term) ||
       status.includes(term) ||
       validationStatus.includes(term)
     );
+
+    const validationMatches = projectMatchesValidationFilter(project, validationFilter);
+
+    return textMatches && validationMatches;
   });
 
   renderProjectsPage(filteredProjects);
