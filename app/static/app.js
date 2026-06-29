@@ -1008,6 +1008,66 @@ function renderProjectValidation(project) {
 }
 
 
+function getProjectValidationFilterLabel(value) {
+  const labels = {
+    all: "Todos",
+    valid: "Válidos",
+    invalid: "Inválidos",
+    without_validation: "Sem validação",
+    requirements_imports_ok: "Requirements x imports OK",
+    requirements_imports_error: "Requirements x imports com erro",
+    requirements_imports_unavailable: "Requirements x imports não disponível",
+  };
+
+  return labels[value] || "Todos";
+}
+
+function buildProjectsEmptyStateMessage() {
+  const searchInput = document.getElementById("projectSearch");
+  const validationFilterInput = document.getElementById("projectValidationFilter");
+
+  const term = searchInput ? searchInput.value.trim() : "";
+  const validationFilter = validationFilterInput ? validationFilterInput.value : "all";
+  const validationFilterLabel = getProjectValidationFilterLabel(validationFilter);
+
+  const hasTextFilter = term.length > 0;
+  const hasValidationFilter = validationFilter !== "all";
+  const hasAnyProjectLoaded = Array.isArray(projectsPageCache) && projectsPageCache.length > 0;
+
+  if (hasTextFilter && hasValidationFilter) {
+    return {
+      title: "Nenhum projeto encontrado",
+      description: `Nenhum projeto encontrado para o texto "${term}" com o filtro de validação "${validationFilterLabel}". Altere a busca, selecione "Todos" ou gere um novo projeto.`,
+    };
+  }
+
+  if (hasTextFilter) {
+    return {
+      title: "Nenhum projeto encontrado",
+      description: `Nenhum projeto encontrado para o texto "${term}". Altere a busca ou gere um novo projeto.`,
+    };
+  }
+
+  if (hasValidationFilter) {
+    return {
+      title: "Nenhum projeto encontrado",
+      description: `Nenhum projeto encontrado para o filtro selecionado: "${validationFilterLabel}". Altere o filtro para "Todos" ou gere um novo projeto com esse tipo de validação.`,
+    };
+  }
+
+  if (!hasAnyProjectLoaded) {
+    return {
+      title: "Nenhum projeto encontrado",
+      description: "Gere uma solução técnica no dashboard para que ela apareça aqui.",
+    };
+  }
+
+  return {
+    title: "Nenhum projeto encontrado",
+    description: "Nenhum projeto corresponde aos critérios selecionados.",
+  };
+}
+
 function renderProjectsValidationSummary(projects) {
   const summaryBox = document.getElementById("projectsValidationSummary");
 
@@ -1082,10 +1142,12 @@ function renderProjectsPage(projects) {
   }
 
   if (!projects || projects.length === 0) {
+    const emptyState = buildProjectsEmptyStateMessage();
+
     projectsPageList.innerHTML = `
       <div class="empty-state">
-        <h3>Nenhum projeto encontrado</h3>
-        <p>Gere uma solução técnica no dashboard para que ela apareça aqui.</p>
+        <h3>${escapeHtml(emptyState.title)}</h3>
+        <p>${escapeHtml(emptyState.description)}</p>
       </div>
     `;
     return;
