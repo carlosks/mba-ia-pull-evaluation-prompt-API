@@ -924,6 +924,21 @@ function projectMatchesValidationFilter(project, validationFilter) {
   return true;
 }
 
+function clearProjectFilters() {
+  const searchInput = document.getElementById("projectSearch");
+  const validationFilterInput = document.getElementById("projectValidationFilter");
+
+  if (searchInput) {
+    searchInput.value = "";
+  }
+
+  if (validationFilterInput) {
+    validationFilterInput.value = "all";
+  }
+
+  renderProjectsPage(projectsPageCache);
+}
+
 function filterProjectsPage() {
   const searchInput = document.getElementById("projectSearch");
   const validationFilterInput = document.getElementById("projectValidationFilter");
