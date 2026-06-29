@@ -1083,6 +1083,45 @@ function buildProjectsEmptyStateMessage() {
   };
 }
 
+function renderProjectsActiveFilters() {
+  const activeFiltersBox = document.getElementById("projectsActiveFilters");
+
+  if (!activeFiltersBox) {
+    return;
+  }
+
+  const searchInput = document.getElementById("projectSearch");
+  const validationFilterInput = document.getElementById("projectValidationFilter");
+
+  const term = searchInput ? searchInput.value.trim() : "";
+  const validationFilter = validationFilterInput ? validationFilterInput.value : "all";
+  const validationFilterLabel = getProjectValidationFilterLabel(validationFilter);
+
+  const activeFilters = [];
+
+  if (term.length > 0) {
+    activeFilters.push(`<span><strong>Busca:</strong> ${escapeHtml(term)}</span>`);
+  }
+
+  if (validationFilter !== "all") {
+    activeFilters.push(`<span><strong>Validação:</strong> ${escapeHtml(validationFilterLabel)}</span>`);
+  }
+
+  if (activeFilters.length === 0) {
+    activeFiltersBox.innerHTML = `
+      <p class="muted small"><strong>Filtros ativos:</strong> nenhum filtro ativo</p>
+    `;
+    return;
+  }
+
+  activeFiltersBox.innerHTML = `
+    <p><strong>Filtros ativos</strong></p>
+    <div class="history-meta">
+      ${activeFilters.join("")}
+    </div>
+  `;
+}
+
 function renderProjectsValidationSummary(projects) {
   const summaryBox = document.getElementById("projectsValidationSummary");
 
@@ -1148,6 +1187,7 @@ function renderProjectsValidationSummary(projects) {
 }
 
 function renderProjectsPage(projects) {
+  renderProjectsActiveFilters();
   renderProjectsValidationSummary(projects);
 
   const projectsPageList = document.getElementById("projectsPageList");
