@@ -847,6 +847,49 @@ async function toggleUserAdmin(userId, isAdmin) {
 
 let projectsPageCache = [];
 
+const PROJECT_FILTERS_STORAGE_KEY = "meusProjetosFiltros";
+
+function saveProjectFilters() {
+  const searchInput = document.getElementById("projectSearch");
+  const validationFilterInput = document.getElementById("projectValidationFilter");
+
+  const filters = {
+    search: searchInput ? searchInput.value : "",
+    validation: validationFilterInput ? validationFilterInput.value : "all",
+  };
+
+  localStorage.setItem(PROJECT_FILTERS_STORAGE_KEY, JSON.stringify(filters));
+}
+
+function restoreProjectFilters() {
+  const searchInput = document.getElementById("projectSearch");
+  const validationFilterInput = document.getElementById("projectValidationFilter");
+
+  const savedFilters = localStorage.getItem(PROJECT_FILTERS_STORAGE_KEY);
+
+  if (!savedFilters) {
+    return;
+  }
+
+  try {
+    const filters = JSON.parse(savedFilters);
+
+    if (searchInput && typeof filters.search === "string") {
+      searchInput.value = filters.search;
+    }
+
+    if (validationFilterInput && typeof filters.validation === "string") {
+      validationFilterInput.value = filters.validation;
+    }
+  } catch (error) {
+    localStorage.removeItem(PROJECT_FILTERS_STORAGE_KEY);
+  }
+}
+
+function clearSavedProjectFilters() {
+  localStorage.removeItem(PROJECT_FILTERS_STORAGE_KEY);
+}
+
 async function loadProjectsPage() {
   const projectsPageList = document.getElementById("projectsPageList");
   const projectsPageMessage = document.getElementById("projectsPageMessage");
@@ -870,7 +913,8 @@ async function loadProjectsPage() {
     const data = await apiGet("/projects/history");
     projectsPageCache = data.projects || [];
 
-    renderProjectsPage(projectsPageCache);
+    restoreProjectFilters();
+    filterProjectsPage();
 
   } catch (error) {
     projectsPageList.innerHTML = `
@@ -936,10 +980,13 @@ function clearProjectFilters() {
     validationFilterInput.value = "all";
   }
 
+  clearSavedProjectFilters();
   renderProjectsPage(projectsPageCache);
 }
 
 function filterProjectsPage() {
+  saveProjectFilters();
+
   const searchInput = document.getElementById("projectSearch");
   const validationFilterInput = document.getElementById("projectValidationFilter");
 
