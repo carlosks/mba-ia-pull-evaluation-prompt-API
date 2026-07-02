@@ -6,6 +6,7 @@ import re
 import tempfile
 import zipfile
 from pathlib import Path
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -139,6 +140,149 @@ def _read_project_validation(project_name: str) -> Optional[Dict[str, Any]]:
             "checks": {},
             "errors": ["Não foi possível ler a validação do metadata.json."],
         }
+
+
+def _read_project_metadata(project_name: str) -> Dict[str, Any]:
+    """
+    Lê o metadata.json completo de um projeto gerado.
+    """
+    if not project_name:
+        return {}
+
+    try:
+        metadata_path = GENERATED_PROJECTS_DIR / project_name / "metadata.json"
+
+        if not metadata_path.exists() or not metadata_path.is_file():
+            return {}
+
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+
+        if isinstance(metadata, dict):
+            return metadata
+
+        return {}
+
+    except Exception:
+        return {}
+
+
+def _metadata_created_at(project_dir: Path, metadata: Dict[str, Any]) -> str:
+    """
+    Obtém a data do projeto a partir do metadata.json ou da data da pasta.
+    """
+    for field_name in ("created_at", "generated_at", "updated_at"):
+        value = metadata.get(field_name)
+
+        if isinstance(value, str) and value.strip():
+            return value
+
+    try:
+        return datetime.fromtimestamp(project_dir.stat().st_mtime).isoformat()
+    except Exception:
+        return ""
+
+
+def _metadata_bug(project_name: str, metadata: Dict[str, Any]) -> str:
+    """
+    Obtém o bug original salvo no metadata.json.
+    """
+    for field_name in ("bug", "original_bug", "prompt", "description"):
+        value = metadata.get(field_name)
+
+        if isinstance(value, str) and value.strip():
+            return value
+
+    request_data = metadata.get("request")
+
+    if isinstance(request_data, dict):
+        value = request_data.get("bug")
+
+        if isinstance(value, str) and value.strip():
+            return value
+
+    return project_name
+
+
+def _metadata_status(metadata: Dict[str, Any]) -> str:
+    """
+    Obtém o status do projeto salvo em metadata.json.
+    """
+    for field_name in ("status", "generation_status", "generation_mode"):
+        value = metadata.get(field_name)
+
+        if isinstance(value, str) and value.strip():
+            return value
+
+    return "generated_from_files"
+
+
+def _metadata_validation(metadata: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """
+    Obtém o bloco validation salvo no metadata.json.
+    """
+    validation = metadata.get("validation")
+
+    if isinstance(validation, dict):
+        return validation
+
+    return None
+
+
+def _project_history_item_from_file(
+    project_dir: Path,
+    synthetic_id: int,
+) -> ProjectHistoryItem:
+    """
+    Monta um ProjectHistoryItem a partir de uma pasta em generated_projects.
+    """
+    project_name = project_dir.name
+    metadata = _read_project_metadata(project_name)
+
+    return ProjectHistoryItem(
+        id=synthetic_id,
+        project_name=project_name,
+        bug=_metadata_bug(project_name, metadata),
+        status=_metadata_status(metadata),
+        created_at=_metadata_created_at(project_dir, metadata),
+        validation=_metadata_validation(metadata),
+    )
+
+
+def _load_project_history_from_files(
+    existing_project_names: set[str],
+) -> List[ProjectHistoryItem]:
+    """
+    Carrega projetos existentes em generated_projects que ainda não estão no banco.
+    """
+    GENERATED_PROJECTS_DIR.mkdir(parents=True, exist_ok=True)
+
+    project_dirs = [
+        item
+        for item in GENERATED_PROJECTS_DIR.iterdir()
+        if item.is_dir()
+    ]
+
+    project_dirs.sort(
+        key=lambda item: item.stat().st_mtime,
+        reverse=True,
+    )
+
+    file_projects: List[ProjectHistoryItem] = []
+
+    for index, project_dir in enumerate(project_dirs, start=1):
+        project_name = project_dir.name
+
+        if project_name in existing_project_names:
+            continue
+
+        file_projects.append(
+            _project_history_item_from_file(
+                project_dir=project_dir,
+                synthetic_id=-index,
+            )
+        )
+
+    return file_projects
 
 
 def _safe_project_dir(project_name: str) -> Path:
@@ -287,10 +431,14 @@ def _require_project_owner(
     project_name: str,
     db: Session,
     current_user: models.User,
-) -> models.Project:
+) -> Optional[models.Project]:
     """
     Garante que o projeto pertence ao usuário autenticado.
+
     Nesta versão, o campo zip_path armazena o project_name.
+    Para projetos recuperados diretamente da pasta generated_projects,
+    permite o acesso quando a pasta existe de forma segura, mesmo que
+    o registro não exista mais no app.db local.
     """
 
     project = db.query(models.Project).filter(
@@ -298,13 +446,17 @@ def _require_project_owner(
         models.Project.owner_id == current_user.id,
     ).first()
 
-    if not project:
+    if project:
+        return project
+
+    try:
+        _safe_project_dir(project_name)
+        return None
+    except HTTPException:
         raise HTTPException(
             status_code=403,
             detail="Você não tem permissão para acessar este projeto.",
         )
-
-    return project
 
 
 def _save_project_history(
@@ -580,26 +732,48 @@ def get_project_history(
 ):
     """
     Lista o histórico de projetos gerados pelo usuário autenticado.
+
+    Além do banco local, também carrega projetos existentes em generated_projects
+    quando eles ainda não estão registrados no app.db.
     """
 
-    projects = db.query(models.Project).filter(
+    db_projects = db.query(models.Project).filter(
         models.Project.owner_id == current_user.id
     ).order_by(models.Project.created_at.desc()).all()
 
-    return {
-        "projects": [
+    history_items: List[ProjectHistoryItem] = []
+    existing_project_names: set[str] = set()
+
+    for project in db_projects:
+        project_name = project.zip_path or ""
+
+        if project_name:
+            existing_project_names.add(project_name)
+
+        history_items.append(
             ProjectHistoryItem(
                 id=project.id,
-                project_name=project.zip_path or "",
+                project_name=project_name,
                 bug=project.bug,
                 status=project.status,
                 created_at=project.created_at.isoformat()
                 if project.created_at
                 else "",
-                validation=_read_project_validation(project.zip_path or ""),
+                validation=_read_project_validation(project_name),
             )
-            for project in projects
-        ]
+        )
+
+    history_items.extend(
+        _load_project_history_from_files(existing_project_names)
+    )
+
+    history_items.sort(
+        key=lambda item: item.created_at or "",
+        reverse=True,
+    )
+
+    return {
+        "projects": history_items
     }
 
 
