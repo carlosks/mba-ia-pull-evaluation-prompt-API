@@ -1169,6 +1169,35 @@ function renderProjectsActiveFilters() {
   `;
 }
 
+function renderProjectsFilteredCount(projects) {
+  const counterBox = document.getElementById("projectsFilteredCount");
+
+  if (!counterBox) {
+    return;
+  }
+
+  const displayedCount = projects ? projects.length : 0;
+  const totalCount = Array.isArray(projectsPageCache) ? projectsPageCache.length : 0;
+
+  if (totalCount === 0) {
+    counterBox.innerHTML = `
+      <p class="muted small"><strong>Projetos exibidos:</strong> 0</p>
+    `;
+    return;
+  }
+
+  if (displayedCount === totalCount) {
+    counterBox.innerHTML = `
+      <p class="muted small"><strong>Projetos exibidos:</strong> ${displayedCount}</p>
+    `;
+    return;
+  }
+
+  counterBox.innerHTML = `
+    <p class="muted small"><strong>Projetos exibidos:</strong> ${displayedCount} de ${totalCount}</p>
+  `;
+}
+
 function renderProjectsValidationSummary(projects) {
   const summaryBox = document.getElementById("projectsValidationSummary");
 
@@ -1235,6 +1264,7 @@ function renderProjectsValidationSummary(projects) {
 
 function renderProjectsPage(projects) {
   renderProjectsActiveFilters();
+  renderProjectsFilteredCount(projects);
   renderProjectsValidationSummary(projects);
 
   const projectsPageList = document.getElementById("projectsPageList");
