@@ -852,10 +852,12 @@ const PROJECT_FILTERS_STORAGE_KEY = "meusProjetosFiltros";
 function saveProjectFilters() {
   const searchInput = document.getElementById("projectSearch");
   const validationFilterInput = document.getElementById("projectValidationFilter");
+  const sourceFilterInput = document.getElementById("projectSourceFilter");
 
   const filters = {
     search: searchInput ? searchInput.value : "",
     validation: validationFilterInput ? validationFilterInput.value : "all",
+    source: sourceFilterInput ? sourceFilterInput.value : "all",
   };
 
   localStorage.setItem(PROJECT_FILTERS_STORAGE_KEY, JSON.stringify(filters));
@@ -864,6 +866,7 @@ function saveProjectFilters() {
 function restoreProjectFilters() {
   const searchInput = document.getElementById("projectSearch");
   const validationFilterInput = document.getElementById("projectValidationFilter");
+  const sourceFilterInput = document.getElementById("projectSourceFilter");
 
   const savedFilters = localStorage.getItem(PROJECT_FILTERS_STORAGE_KEY);
 
@@ -880,6 +883,10 @@ function restoreProjectFilters() {
 
     if (validationFilterInput && typeof filters.validation === "string") {
       validationFilterInput.value = filters.validation;
+    }
+
+    if (sourceFilterInput && typeof filters.source === "string") {
+      sourceFilterInput.value = filters.source;
     }
   } catch (error) {
     localStorage.removeItem(PROJECT_FILTERS_STORAGE_KEY);
@@ -924,6 +931,25 @@ async function loadProjectsPage() {
       </div>
     `;
   }
+}
+
+function projectMatchesSourceFilter(project, sourceFilter) {
+  if (!sourceFilter || sourceFilter === "all") {
+    return true;
+  }
+
+  const source = project.source || "";
+  const projectId = Number(project.id);
+
+  if (sourceFilter === "database") {
+    return source === "database" || (!source && projectId >= 0);
+  }
+
+  if (sourceFilter === "generated_files") {
+    return source === "generated_files" || projectId < 0;
+  }
+
+  return true;
 }
 
 function projectMatchesValidationFilter(project, validationFilter) {
@@ -971,6 +997,7 @@ function projectMatchesValidationFilter(project, validationFilter) {
 function clearProjectFilters() {
   const searchInput = document.getElementById("projectSearch");
   const validationFilterInput = document.getElementById("projectValidationFilter");
+  const sourceFilterInput = document.getElementById("projectSourceFilter");
 
   if (searchInput) {
     searchInput.value = "";
@@ -978,6 +1005,10 @@ function clearProjectFilters() {
 
   if (validationFilterInput) {
     validationFilterInput.value = "all";
+  }
+
+  if (sourceFilterInput) {
+    sourceFilterInput.value = "all";
   }
 
   clearSavedProjectFilters();
@@ -989,26 +1020,33 @@ function filterProjectsPage() {
 
   const searchInput = document.getElementById("projectSearch");
   const validationFilterInput = document.getElementById("projectValidationFilter");
+  const sourceFilterInput = document.getElementById("projectSourceFilter");
 
   const term = searchInput ? searchInput.value.trim().toLowerCase() : "";
   const validationFilter = validationFilterInput ? validationFilterInput.value : "all";
+  const sourceFilter = sourceFilterInput ? sourceFilterInput.value : "all";
 
   const filteredProjects = projectsPageCache.filter(project => {
     const projectName = String(project.project_name || "").toLowerCase();
     const bug = String(project.bug || "").toLowerCase();
     const status = String(project.status || "").toLowerCase();
     const validationStatus = String(project.validation?.status || "").toLowerCase();
+    const sourceLabel = typeof getProjectSourceLabel === "function"
+      ? String(getProjectSourceLabel(project)).toLowerCase()
+      : "";
 
     const textMatches = !term || (
       projectName.includes(term) ||
       bug.includes(term) ||
       status.includes(term) ||
-      validationStatus.includes(term)
+      validationStatus.includes(term) ||
+      sourceLabel.includes(term)
     );
 
     const validationMatches = projectMatchesValidationFilter(project, validationFilter);
+    const sourceMatches = projectMatchesSourceFilter(project, sourceFilter);
 
-    return textMatches && validationMatches;
+    return textMatches && validationMatches && sourceMatches;
   });
 
   renderProjectsPage(filteredProjects);
@@ -1074,6 +1112,16 @@ function renderProjectValidation(project) {
 }
 
 
+function getProjectSourceFilterLabel(value) {
+  const labels = {
+    all: "Todos",
+    database: "Banco",
+    generated_files: "Arquivos locais",
+  };
+
+  return labels[value] || "Todos";
+}
+
 function getProjectValidationFilterLabel(value) {
   const labels = {
     all: "Todos",
@@ -1091,19 +1139,45 @@ function getProjectValidationFilterLabel(value) {
 function buildProjectsEmptyStateMessage() {
   const searchInput = document.getElementById("projectSearch");
   const validationFilterInput = document.getElementById("projectValidationFilter");
+  const sourceFilterInput = document.getElementById("projectSourceFilter");
 
   const term = searchInput ? searchInput.value.trim() : "";
   const validationFilter = validationFilterInput ? validationFilterInput.value : "all";
+  const sourceFilter = sourceFilterInput ? sourceFilterInput.value : "all";
+
   const validationFilterLabel = getProjectValidationFilterLabel(validationFilter);
+  const sourceFilterLabel = getProjectSourceFilterLabel(sourceFilter);
 
   const hasTextFilter = term.length > 0;
   const hasValidationFilter = validationFilter !== "all";
+  const hasSourceFilter = sourceFilter !== "all";
   const hasAnyProjectLoaded = Array.isArray(projectsPageCache) && projectsPageCache.length > 0;
+
+  if (hasTextFilter && hasValidationFilter && hasSourceFilter) {
+    return {
+      title: "Nenhum projeto encontrado",
+      description: `Nenhum projeto encontrado para o texto "${term}" com os filtros "${validationFilterLabel}" e "${sourceFilterLabel}". Altere a busca, selecione "Todos" ou gere um novo projeto.`,
+    };
+  }
 
   if (hasTextFilter && hasValidationFilter) {
     return {
       title: "Nenhum projeto encontrado",
       description: `Nenhum projeto encontrado para o texto "${term}" com o filtro de validação "${validationFilterLabel}". Altere a busca, selecione "Todos" ou gere um novo projeto.`,
+    };
+  }
+
+  if (hasTextFilter && hasSourceFilter) {
+    return {
+      title: "Nenhum projeto encontrado",
+      description: `Nenhum projeto encontrado para o texto "${term}" com o filtro de origem "${sourceFilterLabel}". Altere a busca, selecione "Todos" ou gere um novo projeto.`,
+    };
+  }
+
+  if (hasValidationFilter && hasSourceFilter) {
+    return {
+      title: "Nenhum projeto encontrado",
+      description: `Nenhum projeto encontrado para os filtros "${validationFilterLabel}" e "${sourceFilterLabel}". Altere os filtros para "Todos" ou gere um novo projeto.`,
     };
   }
 
@@ -1118,6 +1192,13 @@ function buildProjectsEmptyStateMessage() {
     return {
       title: "Nenhum projeto encontrado",
       description: `Nenhum projeto encontrado para o filtro selecionado: "${validationFilterLabel}". Altere o filtro para "Todos" ou gere um novo projeto com esse tipo de validação.`,
+    };
+  }
+
+  if (hasSourceFilter) {
+    return {
+      title: "Nenhum projeto encontrado",
+      description: `Nenhum projeto encontrado para o filtro de origem selecionado: "${sourceFilterLabel}". Altere o filtro para "Todos" ou gere um novo projeto.`,
     };
   }
 
@@ -1143,10 +1224,14 @@ function renderProjectsActiveFilters() {
 
   const searchInput = document.getElementById("projectSearch");
   const validationFilterInput = document.getElementById("projectValidationFilter");
+  const sourceFilterInput = document.getElementById("projectSourceFilter");
 
   const term = searchInput ? searchInput.value.trim() : "";
   const validationFilter = validationFilterInput ? validationFilterInput.value : "all";
+  const sourceFilter = sourceFilterInput ? sourceFilterInput.value : "all";
+
   const validationFilterLabel = getProjectValidationFilterLabel(validationFilter);
+  const sourceFilterLabel = getProjectSourceFilterLabel(sourceFilter);
 
   const activeFilters = [];
 
@@ -1156,6 +1241,10 @@ function renderProjectsActiveFilters() {
 
   if (validationFilter !== "all") {
     activeFilters.push(`<span><strong>Validação:</strong> ${escapeHtml(validationFilterLabel)}</span>`);
+  }
+
+  if (sourceFilter !== "all") {
+    activeFilters.push(`<span><strong>Origem:</strong> ${escapeHtml(sourceFilterLabel)}</span>`);
   }
 
   if (activeFilters.length === 0) {
