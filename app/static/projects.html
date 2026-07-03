@@ -61,7 +61,19 @@
       <div class="history-actions">
         <button type="button" onclick="clearProjectFilters()">Limpar filtros</button>
       </div>
-      <div id="projectsActiveFilters" class="history-meta"></div>
+      <div class="form-group">
+      <div class="form-group">
+        <label for="projectSourceFilter"><strong>Filtrar por origem</strong></label>
+        <select id="projectSourceFilter" onchange="filterProjectsPage()">
+          <option value="all">Todos</option>
+          <option value="database">Banco</option>
+          <option value="generated_files">Arquivos locais</option>
+        </select>
+      </div>
+
+</div>
+
+<div id="projectsActiveFilters" class="history-meta"></div>
       <div id="projectsFilteredCount" class="history-meta"></div>
 
       <div id="projectsValidationSummary" class="history-validation"></div>
