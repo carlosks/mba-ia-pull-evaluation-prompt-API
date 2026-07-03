@@ -1023,8 +1023,12 @@ function renderProjectValidation(project) {
 
   if (!validation) {
     return `
-      <div class="history-meta">
-        <span><strong>Validação:</strong> não disponível</span>
+      <div class="history-validation">
+        <p><strong>Validação:</strong> <span class="badge">não disponível</span></p>
+        <p class="muted small">
+          Este projeto pode ter sido gerado antes da validação automática
+          ou não possui o campo validation no metadata.json.
+        </p>
       </div>
     `;
   }
