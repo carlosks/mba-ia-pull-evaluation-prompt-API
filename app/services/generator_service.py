@@ -407,11 +407,53 @@ def sanitize_generated_python_code(content: str) -> str:
     return "\n".join(lines).strip() + "\n"
 
 
-def is_supplier_bug(bug: str) -> bool:
+def is_devops_database_request(bug: str) -> bool:
     if not bug:
         return False
 
     text = bug.lower()
+
+    devops_terms = [
+        "jenkins",
+        "pipeline",
+        "ci/cd",
+        "cicd",
+        "dml",
+        "sql server",
+        "sqlserver",
+        "produção",
+        "producao",
+        "banco de produção",
+        "banco de producao",
+    ]
+
+    return any(term in text for term in devops_terms)
+
+
+def is_supplier_bug(bug: str) -> bool:
+    if not bug:
+        return False
+
+    if is_devops_database_request(bug):
+        return False
+
+    text = bug.lower()
+
+    supplier_terms = [
+        "fornecedor",
+        "fornecedores",
+        "cnpj",
+        "cadastro de fornecedor",
+        "cadastrar fornecedor",
+        "relatoriorespostasfornecedor",
+        "relatório respostas fornecedor",
+        "relatorio respostas fornecedor",
+    ]
+
+    return any(term in text for term in supplier_terms)
+
+def contains_supplier_context(items: List[str]) -> bool:
+    text = " ".join(str(item) for item in items).lower()
 
     supplier_terms = [
         "fornecedor",
@@ -423,14 +465,203 @@ def is_supplier_bug(bug: str) -> bool:
         "contatos",
         "cadastro de fornecedor",
         "cadastrar fornecedor",
-        "sqlite",
-        "banco de dados",
-        "persistir",
-        "persistência",
-        "persistencia",
     ]
 
     return any(term in text for term in supplier_terms)
+
+
+def generate_devops_database_acceptance_criteria() -> List[str]:
+    return [
+        "Dado que exista um script DML SQL Server versionado no repositório",
+        "Quando a pipeline Jenkins for executada para o ambiente de Produção",
+        "Então o arquivo SQL deve ser validado antes da execução",
+        "Dado que o ambiente selecionado seja Produção",
+        "Quando a etapa de execução da DML for alcançada",
+        "Então a pipeline deve solicitar aprovação manual de um usuário autorizado",
+        "Dado que a execução tenha sido aprovada",
+        "Quando o script SQL for executado",
+        "Então as credenciais devem ser obtidas exclusivamente do Jenkins Credentials",
+        "Dado que ocorra erro de conexão, sintaxe, permissão ou execução no SQL Server",
+        "Quando a falha for retornada",
+        "Então a pipeline deve terminar com status de falha e registrar a mensagem de erro",
+        "Dado que a DML seja executada com sucesso",
+        "Quando a etapa pós-execução for iniciada",
+        "Então uma consulta de conferência deve validar o resultado esperado",
+        "Dado que a pipeline gere logs",
+        "Quando os logs forem armazenados",
+        "Então senhas, tokens e strings de conexão não devem ser exibidos",
+    ]
+
+def generate_devops_database_main_py() -> str:
+    return '''from fastapi import FastAPI
+from pydantic import BaseModel
+from typing import List
+
+
+class AcceptanceCriteriaResponse(BaseModel):
+    acceptance_criteria: List[str]
+
+
+class PipelineChecklistResponse(BaseModel):
+    checklist: List[str]
+
+
+ACCEPTANCE_CRITERIA = [
+    "Dado que exista um script DML SQL Server versionado no repositório",
+    "Quando a pipeline Jenkins for executada para o ambiente de Produção",
+    "Então o arquivo SQL deve ser validado antes da execução",
+    "Dado que o ambiente selecionado seja Produção",
+    "Quando a etapa de execução da DML for alcançada",
+    "Então a pipeline deve solicitar aprovação manual de um usuário autorizado",
+    "Dado que a execução tenha sido aprovada",
+    "Quando o script SQL for executado",
+    "Então as credenciais devem ser obtidas exclusivamente do Jenkins Credentials",
+    "Dado que ocorra erro de conexão, sintaxe, permissão ou execução no SQL Server",
+    "Quando a falha for retornada",
+    "Então a pipeline deve terminar com status de falha e registrar a mensagem de erro",
+    "Dado que a DML seja executada com sucesso",
+    "Quando a etapa pós-execução for iniciada",
+    "Então uma consulta de conferência deve validar o resultado esperado",
+    "Dado que a pipeline gere logs",
+    "Quando os logs forem armazenados",
+    "Então senhas, tokens e strings de conexão não devem ser exibidos",
+]
+
+PIPELINE_CHECKLIST = [
+    "Validar se o script SQL está versionado no repositório",
+    "Validar se o ambiente selecionado é Produção",
+    "Solicitar aprovação manual antes da execução",
+    "Carregar credenciais protegidas do Jenkins Credentials",
+    "Executar o script DML no SQL Server de Produção",
+    "Registrar logs sem expor senhas, tokens ou strings de conexão",
+    "Executar consulta de conferência pós-execução",
+    "Falhar a pipeline caso ocorra erro de conexão, sintaxe, permissão ou execução",
+]
+
+
+app = FastAPI(
+    title="Pipeline Jenkins para DML SQL Server",
+    description="API de apoio documental para solução técnica de execução controlada de DML em Produção.",
+    version="1.0.0",
+)
+
+
+@app.get("/")
+def root():
+    return {
+        "message": "Solução técnica para execução controlada de DML SQL Server via Jenkins"
+    }
+
+
+@app.get("/health")
+def health():
+    return {
+        "status": "ok"
+    }
+
+
+@app.get("/acceptance-criteria", response_model=AcceptanceCriteriaResponse)
+def get_acceptance_criteria():
+    return {
+        "acceptance_criteria": ACCEPTANCE_CRITERIA
+    }
+
+
+@app.get("/pipeline-checklist", response_model=PipelineChecklistResponse)
+def get_pipeline_checklist():
+    return {
+        "checklist": PIPELINE_CHECKLIST
+    }
+'''
+
+
+def generate_devops_database_readme(
+    bug: str,
+    acceptance_criteria: Optional[List[str]] = None,
+    test_cases: Optional[List[str]] = None,
+) -> str:
+    acceptance_criteria = acceptance_criteria or generate_devops_database_acceptance_criteria()
+    test_cases = test_cases or generate_fallback_test_cases(bug)
+
+    lines = [
+        "# Pipeline Jenkins para DML SQL Server em Produção",
+        "",
+        "Projeto gerado automaticamente a partir do seguinte BUG:",
+        "",
+        "```text",
+        bug,
+        "```",
+        "",
+        "## Objetivo",
+        "",
+        (
+            "Definir uma solução técnica para executar scripts DML no banco SQL Server de Produção "
+            "por meio de uma pipeline Jenkins controlada, validada, aprovada e auditável."
+        ),
+        "",
+        "## Solução implementada",
+        "",
+        "- Validação prévia do script SQL versionado.",
+        "- Aprovação manual obrigatória antes da execução em Produção.",
+        "- Uso de credenciais protegidas pelo Jenkins Credentials.",
+        "- Execução controlada do script DML no SQL Server.",
+        "- Registro de logs de execução sem exposição de dados sensíveis.",
+        "- Tratamento de falhas de conexão, sintaxe, permissão ou execução.",
+        "- Consulta de conferência após a execução da DML.",
+        "",
+        "## Tecnologias utilizadas",
+        "",
+        "- Python",
+        "- FastAPI",
+        "- Pydantic",
+        "- Uvicorn",
+        "- Jenkins",
+        "- SQL Server",
+        "",
+        "## Como executar",
+        "",
+        "```bash",
+        "pip install -r requirements.txt",
+        "python -m uvicorn main:app --reload --port 8004",
+        "```",
+        "",
+        "Acesse:",
+        "",
+        "```text",
+        "http://127.0.0.1:8004/docs",
+        "```",
+        "",
+        "## Como testar",
+        "",
+        "Acesse a documentação interativa da API e utilize os endpoints disponíveis para consultar os critérios de aceitação e o checklist da pipeline Jenkins.",
+        "",
+        "## Endpoints disponíveis",
+        "",
+        "- `GET /`: Retorna uma mensagem de identificação da solução.",
+        "- `GET /health`: Verifica a saúde da aplicação.",
+        "- `GET /acceptance-criteria`: Lista os critérios de aceitação da solução.",
+        "- `GET /pipeline-checklist`: Lista os controles necessários para a execução da DML em Produção.",
+        "",
+        "## Critérios de aceitação",
+        "",
+        *[f"- {item}" for item in acceptance_criteria],
+        "",
+        "## Casos de teste",
+        "",
+        *[f"- {item}" for item in test_cases],
+        "",
+        "## Observações",
+        "",
+        (
+            "A execução real da DML deve ocorrer na pipeline Jenkins, utilizando script SQL versionado, "
+            "aprovação manual, credenciais protegidas e validação pós-execução."
+        ),
+        "",
+    ]
+
+    return "\n".join(lines)
+
+
 
 
 
@@ -460,6 +691,17 @@ def is_upload_or_attachment_bug(bug: str) -> bool:
     return any(term in text for term in upload_terms)
 
 def generate_fallback_test_cases(bug: str) -> List[str]:
+
+    if is_devops_database_request(bug):
+        return [
+            "Deve validar a existência do script DML antes da execução.",
+            "Deve solicitar aprovação manual antes de executar em Produção.",
+            "Deve executar o script usando credenciais protegidas do Jenkins.",
+            "Deve falhar a pipeline quando o SQL Server retornar erro.",
+            "Deve executar consulta de conferência após a DML.",
+            "Deve impedir exposição de senhas, tokens e strings de conexão nos logs.",
+        ]
+
     if is_supplier_bug(bug):
         return [
             "Deve cadastrar fornecedor com CNPJ válido, razão social, endereço e contatos.",
@@ -1557,6 +1799,29 @@ def ensure_files(
     readme_md = files.get("README.md")
     requirements_txt = files.get("requirements.txt")
 
+
+    if is_devops_database_request(bug):
+        generated_content = " ".join(
+            str(value)
+            for value in [
+                main_py,
+                readme_md,
+                *files.values(),
+            ]
+            if value
+        )
+
+        if contains_supplier_context([generated_content]):
+            files = {}
+
+        main_py = generate_devops_database_main_py()
+        requirements_txt = "fastapi\nuvicorn\npydantic\n"
+        readme_md = generate_devops_database_readme(
+            bug=bug,
+            acceptance_criteria=acceptance_criteria or generate_devops_database_acceptance_criteria(),
+            test_cases=test_cases or generate_fallback_test_cases(bug),
+        )
+
     if is_supplier_bug(bug) and not is_upload_or_attachment_bug(bug):
         main_py = build_supplier_api_main_py()
         files["test_fornecedores.py"] = build_supplier_api_tests_py()
@@ -1672,6 +1937,10 @@ def generate_solution_project(bug: str) -> Dict[str, Any]:
 
     user_story = str(data.get("user_story", "")).strip()
     acceptance_criteria = ensure_list(data.get("acceptance_criteria", []))
+
+    if is_devops_database_request(bug) and contains_supplier_context(acceptance_criteria):
+        acceptance_criteria = generate_devops_database_acceptance_criteria()
+
     technical_analysis = str(data.get("technical_analysis", "")).strip()
     solution_plan = ensure_list(data.get("solution_plan", []))
     test_cases = ensure_list(data.get("test_cases", []))
@@ -1728,10 +1997,16 @@ def generate_solution_project(bug: str) -> Dict[str, Any]:
         if not test_cases:
             test_cases = generate_fallback_test_cases(bug)
 
+    if is_devops_database_request(bug) and contains_supplier_context(acceptance_criteria):
+        acceptance_criteria = generate_devops_database_acceptance_criteria()
+
     if not user_story:
         fallback = generate_all(bug)
         user_story = fallback.get("user_story", "")
         acceptance_criteria = fallback.get("acceptance_criteria", acceptance_criteria)
+
+    if is_devops_database_request(bug) and contains_supplier_context(acceptance_criteria):
+        acceptance_criteria = generate_devops_database_acceptance_criteria()
 
     if not technical_analysis:
         technical_analysis = (
