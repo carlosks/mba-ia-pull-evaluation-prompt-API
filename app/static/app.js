@@ -70,13 +70,25 @@ function formatDateTime(value) {
   }
 
   try {
-    const date = new Date(value);
+    const rawValue = String(value).trim();
+
+    if (!rawValue) {
+      return "-";
+    }
+
+    const hasTimezone = /[zZ]$|[+-]\d{2}:\d{2}$/.test(rawValue);
+    const normalizedValue = hasTimezone ? rawValue : `${rawValue}Z`;
+
+    const date = new Date(normalizedValue);
 
     if (Number.isNaN(date.getTime())) {
       return value;
     }
 
-    return date.toLocaleString("pt-BR");
+    return date.toLocaleString("pt-BR", {
+      dateStyle: "short",
+      timeStyle: "medium",
+    });
   } catch {
     return value;
   }
