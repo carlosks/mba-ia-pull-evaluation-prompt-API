@@ -1,9 +1,12 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 
 from app.database import Base
+
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 class User(Base):
@@ -30,7 +33,7 @@ class User(Base):
     is_active = Column(Boolean, nullable=False, default=True)
     is_admin = Column(Boolean, nullable=False, default=False)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     projects = relationship(
         "Project",
@@ -62,9 +65,11 @@ class Project(Base):
     # Nesta aplicação, zip_path também é usado para armazenar o project_name.
     zip_path = Column(String)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     owner_id = Column(Integer, ForeignKey("users.id"))
+
+
     owner = relationship("User", back_populates="projects")
 
 
@@ -88,6 +93,6 @@ class UsageLog(Base):
     # success, failed, blocked
     status = Column(String, nullable=False, default="success")
 
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=utc_now, index=True)
 
     user = relationship("User", back_populates="usage_logs")
