@@ -6,7 +6,7 @@ import re
 import tempfile
 import zipfile
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -165,6 +165,15 @@ def _read_project_metadata(project_name: str) -> Dict[str, Any]:
     except Exception:
         return {}
 
+def _isoformat_utc(value: datetime | None) -> str:
+    if not value:
+        return ""
+
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+
+    return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
 
 def _metadata_created_at(project_dir: Path, metadata: Dict[str, Any]) -> str:
     """
@@ -177,7 +186,7 @@ def _metadata_created_at(project_dir: Path, metadata: Dict[str, Any]) -> str:
             return value
 
     try:
-        return datetime.fromtimestamp(project_dir.stat().st_mtime).isoformat()
+        return _isoformat_utc(datetime.fromtimestamp(project_dir.stat().st_mtime, tz=timezone.utc))
     except Exception:
         return ""
 
@@ -756,9 +765,7 @@ def get_project_history(
                 project_name=project_name,
                 bug=project.bug,
                 status=project.status,
-                created_at=project.created_at.isoformat()
-                if project.created_at
-                else "",
+      created_at=_isoformat_utc(project.created_at),
                 validation=_read_project_validation(project_name),
             )
         )

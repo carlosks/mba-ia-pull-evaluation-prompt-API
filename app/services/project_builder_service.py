@@ -1,8 +1,11 @@
 import os
 import re
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
+
+def utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
@@ -539,7 +542,7 @@ def create_project_files(
 
     metadata = {
         "project_name": project_name,
-        "created_at": datetime.now().isoformat(),
+        "created_at": utc_now_iso(),
         "generation_mode": "template",
         "domain": domain,
         "bug": bug,
@@ -893,7 +896,7 @@ def create_solution_project_files(
 
     metadata = {
         "project_name": project_name,
-        "created_at": datetime.now().isoformat(),
+        "created_at": utc_now_iso(),
         "generation_mode": "openai_solution",
         "bug": bug,
         "user_story": user_story,
