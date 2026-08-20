@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -8,19 +10,24 @@ from app.routes.projects import router as projects_router
 from app.services.migration_service import run_startup_migrations
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    run_startup_migrations()
+    yield
+
+
 app = FastAPI(
-    title="MBA IA - Bug Evaluation API",
+   title="MBA IA - Bug Evaluation API",
     description=(
         "API para geração de User Stories, soluções técnicas, "
-        "ZIPs e testes automatizados a partir de Bugs"
+        "critérios de aceitação e projetos gerados por IA."
     ),
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 
-@app.on_event("startup")
-def startup_event():
-    run_startup_migrations()
+
 
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
