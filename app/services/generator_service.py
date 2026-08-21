@@ -41,7 +41,7 @@ def get_llm() -> ChatOpenAI:
 prompt = ChatPromptTemplate.from_template("""
 Você é um especialista sênior em análise de requisitos e user stories.
 
-Transforme o BUG abaixo em uma User Story e critérios de aceitação.
+Transforme a DEMANDA TÉCNICA abaixo em uma User Story e critérios de aceitação.
 
 FORMATO OBRIGATÓRIO DA USER STORY:
 Como um <tipo de usuário>, eu quero <ação relacionada diretamente ao bug>, para que <benefício esperado>.
@@ -69,7 +69,7 @@ Quando <ação>
 Então <resultado esperado>
 E <validação adicional>
 
-BUG:
+DEMANDA TÉCNICA:
 {bug}
 """)
 
@@ -77,7 +77,7 @@ BUG:
 solution_prompt = ChatPromptTemplate.from_template("""
 Você é um arquiteto de software sênior e desenvolvedor Python/FastAPI.
 
-Sua tarefa é receber um BUG e gerar uma solução técnica implementável.
+Sua tarefa é receber uma DEMANDA TÉCNICA, que pode ser bug, melhoria, automação, regra de negócio, integração ou problema de arquitetura, e gerar uma solução técnica implementável.
 
 Você deve retornar EXCLUSIVAMENTE um JSON válido, sem markdown, sem explicações fora do JSON, sem ```json.
 
@@ -152,7 +152,7 @@ pydantic
 - Não coloque crases markdown envolvendo o JSON final.
 - Não retorne texto fora do JSON.
 
-BUG:
+DEMANDA TÉCNICA:
 {bug}
 """)
 
@@ -175,7 +175,7 @@ Inclua obrigatoriamente estas seções:
 
 # <Título específico do projeto>
 
-## Bug original
+## Demanda original
 
 ## Objetivo
 
@@ -195,7 +195,7 @@ Inclua obrigatoriamente estas seções:
 
 Contexto:
 
-BUG:
+DEMANDA TÉCNICA:
 {bug}
 
 USER STORY:
@@ -359,7 +359,7 @@ def generate_fallback_readme(bug: str) -> str:
     lines = [
         "# Projeto Gerado",
         "",
-        "Projeto gerado automaticamente a partir do bug:",
+        "Projeto gerado automaticamente a partir da demanda técnica:",
         "",
         "```text",
         bug,
@@ -586,7 +586,7 @@ def generate_devops_database_readme(
     lines = [
         "# Pipeline Jenkins para DML SQL Server em Produção",
         "",
-        "Projeto gerado automaticamente a partir do seguinte BUG:",
+        "Projeto gerado automaticamente a partir da seguinte demanda técnica:",
         "",
         "```text",
         bug,
@@ -1321,7 +1321,7 @@ def generate_supplier_readme_sqlite(bug: str) -> str:
     lines = [
         "# API de Fornecedores com SQLite",
         "",
-        "Projeto gerado automaticamente a partir do seguinte BUG:",
+        "Projeto gerado automaticamente a partir da seguinte demanda técnica:",
         "",
         "```text",
         bug,
@@ -1664,7 +1664,7 @@ def generate_ai_readme(
         raise ValueError("README gerado pela IA ficou vazio ou incompleto.")
 
     required_sections = [
-        "## Bug original",
+        "## Demanda original",
         "## Objetivo",
         "## Solução implementada",
         "## Como executar",
@@ -2033,3 +2033,4 @@ def generate_solution_project(bug: str) -> Dict[str, Any]:
         "test_cases": test_cases,
         "files": files,
     }
+
