@@ -6,3 +6,15 @@ __pycache__/
 *.pyc
 .DS_Store
 generated_projects/
+
+# ------------------------------------------------------------
+# Nunca versionar: bancos, documentos pessoais e artefatos gerados
+# ------------------------------------------------------------
+*.db
+*.sqlite
+*.sqlite3
+*.docx
+*.zip
+generated/
+.env.*
+!.env.example

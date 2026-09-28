@@ -1,15 +1,13 @@
-from datetime import datetime, timedelta
-from jose import JWTError, jwt
-from fastapi import Depends, HTTPException, status
+from datetime import datetime, timedelta, timezone
+
+from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
+from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 
-from app.database import SessionLocal
 from app import models
-
-SECRET_KEY = "super-secret-key-change-this"
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 120
+from app.config import ACCESS_TOKEN_EXPIRE_MINUTES, JWT_ALGORITHM, SECRET_KEY
+from app.database import SessionLocal
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
@@ -26,15 +24,15 @@ def get_db():
 # TOKEN
 def create_access_token(data: dict):
     to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
 
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=JWT_ALGORITHM)
 
 
 def decode_token(token: str):
     try:
-        return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return jwt.decode(token, SECRET_KEY, algorithms=[JWT_ALGORITHM])
     except JWTError:
         return None
 
@@ -42,18 +40,32 @@ def decode_token(token: str):
 # USER AUTH
 def get_current_user(
     token: str = Depends(oauth2_scheme),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
+    credentials_error = HTTPException(
+        status_code=401,
+        detail="Credenciais inválidas ou sessão expirada.",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
     payload = decode_token(token)
 
     if payload is None:
-        raise HTTPException(status_code=401, detail="Token inválido")
+        raise credentials_error
 
     email = payload.get("sub")
+
+    if not email:
+        raise credentials_error
 
     user = db.query(models.User).filter(models.User.email == email).first()
 
     if not user:
-        raise HTTPException(status_code=401, detail="Usuário não encontrado")
+        raise credentials_error
+
+    # Usuário desativado pelo admin perde o acesso imediatamente,
+    # mesmo que ainda tenha um token válido.
+    if user.is_active is False:
+        raise HTTPException(status_code=403, detail="Usuário inativo.")
 
     return user

@@ -3,4 +3,17 @@ services:
     name: bug-to-api
     runtime: python
     buildCommand: "pip install -r requirements.txt"
-    startCommand: "uvicorn app.main:app --host 0.0.0.0 --port 10000"
+    # --proxy-headers faz o limite por IP enxergar o IP real do cliente atrás do proxy do Render.
+    startCommand: "uvicorn app.main:app --host 0.0.0.0 --port 10000 --proxy-headers --forwarded-allow-ips='*'"
+    healthCheckPath: /health
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: CREATE_DEV_ADMIN
+        value: "false"
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false

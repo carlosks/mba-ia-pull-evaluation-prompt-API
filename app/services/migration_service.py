@@ -1,12 +1,16 @@
 from __future__ import annotations
 
-import os
+import logging
+import secrets
 
 from passlib.context import CryptContext
 from sqlalchemy import inspect, text
 from sqlalchemy.engine import Engine
 
-from app.database import engine
+from app.config import CREATE_DEV_ADMIN, DEV_ADMIN_EMAIL, DEV_ADMIN_PASSWORD
+from app.database import Base, engine
+
+logger = logging.getLogger("app.migrations")
 
 
 def _column_exists(db_engine: Engine, table_name: str, column_name: str) -> bool:
@@ -32,95 +36,69 @@ def _hash_password(password: str) -> str:
     return pwd_context.hash(password[:72])
 
 
-def _is_sqlite_database() -> bool:
-    database_url = os.getenv("DATABASE_URL", "sqlite:///./app.db")
-    return database_url.startswith("sqlite")
-
-
-def _should_create_dev_admin() -> bool:
-    value = os.getenv("CREATE_DEV_ADMIN")
-
-    if value is None:
-        return _is_sqlite_database()
-
-    return value.strip().lower() in {"1", "true", "yes", "sim", "on"}
-
-
 def ensure_development_admin_user(engine: Engine) -> None:
     """
-    Cria ou atualiza um usuário admin local para ambiente de desenvolvimento.
+    Cria um usuário admin local, apenas em desenvolvimento.
 
-    Por segurança, a criação automática só acontece quando:
-    - CREATE_DEV_ADMIN=true; ou
-    - DATABASE_URL é SQLite e CREATE_DEV_ADMIN não foi definido.
-
-    Em produção, use CREATE_DEV_ADMIN=false.
+    Regras de segurança:
+    - Nunca roda em produção (ver app.config.CREATE_DEV_ADMIN).
+    - Só roda com CREATE_DEV_ADMIN=true explícito.
+    - Se DEV_ADMIN_PASSWORD não for informada, gera uma senha aleatória
+      e a mostra uma única vez no log.
+    - Se o usuário já existir, a senha dele NÃO é alterada.
     """
 
-    if not _should_create_dev_admin():
+    if not CREATE_DEV_ADMIN:
         return
 
-    admin_email = os.getenv("DEV_ADMIN_EMAIL", "admin@exemplo.com")
-    admin_password = os.getenv("DEV_ADMIN_PASSWORD", "123456")
+    if not _table_exists(engine, "users"):
+        return
+
+    admin_email = DEV_ADMIN_EMAIL
 
     with engine.begin() as conn:
-        if not _table_exists(engine, "users"):
-            return
-
         existing_user = conn.execute(
             text("SELECT id FROM users WHERE email = :email"),
             {"email": admin_email},
         ).fetchone()
 
-        hashed_password = _hash_password(admin_password)
-
         if existing_user:
             conn.execute(
-                text(
-                    """
-                    UPDATE users
-                    SET hashed_password = :hashed_password,
-                        plan = 'pro',
-                        monthly_generation_limit = 50,
-                        is_active = 1,
-                        is_admin = 1
-                    WHERE email = :email
-                    """
-                ),
-                {
-                    "email": admin_email,
-                    "hashed_password": hashed_password,
-                },
+                text("UPDATE users SET is_admin = :true, is_active = :true WHERE email = :email"),
+                {"email": admin_email, "true": True},
             )
-        else:
-            conn.execute(
-                text(
-                    """
-                    INSERT INTO users (
-                        email,
-                        hashed_password,
-                        plan,
-                        monthly_generation_limit,
-                        is_active,
-                        is_admin
-                    )
-                    VALUES (
-                        :email,
-                        :hashed_password,
-                        'pro',
-                        50,
-                        1,
-                        1
-                    )
-                    """
-                ),
-                {
-                    "email": admin_email,
-                    "hashed_password": hashed_password,
-                },
-            )
+            logger.info("Admin de desenvolvimento já existe: %s", admin_email)
+            return
 
-    print(f"Development admin user checked successfully: {admin_email}")
+        admin_password = DEV_ADMIN_PASSWORD or secrets.token_urlsafe(12)
+
+        conn.execute(
+            text(
+                """
+                INSERT INTO users (
+                    email, hashed_password, plan,
+                    monthly_generation_limit, is_active, is_admin
+                )
+                VALUES (:email, :hashed_password, 'admin', -1, :true, :true)
+                """
+            ),
+            {
+                "email": admin_email,
+                "hashed_password": _hash_password(admin_password),
+                "true": True,
+            },
+        )
+
+    if DEV_ADMIN_PASSWORD:
+        logger.warning("Admin de desenvolvimento criado: %s", admin_email)
+    else:
+        logger.warning(
+            "Admin de desenvolvimento criado: %s | senha gerada: %s "
+            "(defina DEV_ADMIN_PASSWORD para escolher a senha)",
+            admin_email,
+            admin_password,
+        )
+
 
 def run_startup_migrations() -> None:
     """
@@ -131,6 +109,12 @@ def run_startup_migrations() -> None:
     - Criar colunas novas na tabela users.
     - Criar tabela usage_logs se não existir.
     """
+
+    # Cria as tabelas que ainda não existem (banco novo).
+    # Importar models registra todas as tabelas no Base.metadata.
+    from app import models  # noqa: F401
+
+    Base.metadata.create_all(bind=engine)
 
     with engine.begin() as conn:
         if _table_exists(engine, "users"):
@@ -195,4 +179,4 @@ def run_startup_migrations() -> None:
             )
 
     ensure_development_admin_user(engine)
-    print("Database migrations checked successfully.")
+    logger.info("Database migrations checked successfully.")

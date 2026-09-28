@@ -1,7 +1,7 @@
-from __future__ import annotations
-
 import json
+import logging
 import os
+import uuid
 import re
 import tempfile
 import zipfile
@@ -9,13 +9,15 @@ from pathlib import Path
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse, PlainTextResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from starlette.background import BackgroundTask
 
 from app import models
+from app.config import RATE_LIMIT_GENERATE
+from app.rate_limit import limiter
 from app.security import get_current_user, get_db
 from app.services.generator_service import generate_all, generate_solution_project
 from app.services.project_builder_service import (
@@ -31,6 +33,26 @@ from app.services.usage_service import (
 router = APIRouter(
     tags=["Projects"],
 )
+
+logger = logging.getLogger("app.projects")
+
+
+def _generation_error(action: str, error: Exception) -> HTTPException:
+    """
+    Registra o erro completo no log do servidor e devolve ao cliente
+    apenas uma mensagem genérica com um código de rastreio.
+    Detalhes internos (stack, chaves, caminhos) nunca vão para a resposta.
+    """
+    error_id = uuid.uuid4().hex[:12]
+    logger.exception("Falha ao %s [erro=%s]: %s", action, error_id, error)
+
+    return HTTPException(
+        status_code=500,
+        detail=(
+            f"Não foi possível {action}. Tente novamente em instantes. "
+            f"Se o problema persistir, informe o código {error_id} ao suporte."
+        ),
+    )
 
 
 GENERATED_PROJECTS_DIR = Path("generated_projects")
@@ -522,7 +544,9 @@ def _save_project_history(
 # ============================================================
 
 @router.post("/generate", response_model=ProjectGenerateResponse)
+@limiter.limit(RATE_LIMIT_GENERATE)
 def generate_project(
+    request: Request,
     payload: ProjectGenerateRequest,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
@@ -565,14 +589,13 @@ def generate_project(
             status="failed",
         )
 
-        raise HTTPException(
-            status_code=500,
-            detail=f"Erro ao gerar projeto: {str(e)}",
-        )
+        raise _generation_error("gerar o projeto", e)
 
 
 @router.post("/generate-full", response_model=ProjectGenerateFullResponse)
+@limiter.limit(RATE_LIMIT_GENERATE)
 def generate_full_project(
+    request: Request,
     payload: ProjectGenerateRequest,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
@@ -636,14 +659,13 @@ def generate_full_project(
             status="failed",
         )
 
-        raise HTTPException(
-            status_code=500,
-            detail=f"Erro ao gerar projeto completo: {str(e)}",
-        )
+        raise _generation_error("gerar o projeto completo", e)
 
 
 @router.post("/generate-solution", response_model=ProjectGenerateSolutionResponse)
+@limiter.limit(RATE_LIMIT_GENERATE)
 def generate_solution(
+    request: Request,
     payload: ProjectGenerateRequest,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
@@ -724,10 +746,7 @@ def generate_solution(
             status="failed",
         )
 
-        raise HTTPException(
-            status_code=500,
-            detail=f"Erro ao gerar solução técnica: {str(e)}",
-        )
+        raise _generation_error("gerar a solução técnica", e)
 
 
 # ============================================================
