@@ -178,15 +178,17 @@ def register_usage(
     endpoint: str,
     project_name: str | None = None,
     status: str = "success",
+    llm_usage: dict | None = None,
 ) -> models.UsageLog:
     """
-    Registra uma tentativa de geração.
+    Registra uma tentativa de geração, com tokens e custo quando disponíveis.
     """
     usage = models.UsageLog(
         user_id=user.id,
         endpoint=endpoint,
         project_name=project_name,
         status=status,
+        **(llm_usage or {}),
     )
 
     db.add(usage)

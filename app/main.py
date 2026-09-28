@@ -11,7 +11,9 @@ from app.config import CORS_ORIGINS, DOCS_ENABLED
 from app.rate_limit import limiter
 from app.routes.admin import router as admin_router
 from app.routes.auth import router as auth_router
+from app.routes.jobs import router as jobs_router
 from app.routes.projects import router as projects_router
+from app.services.jobs_service import recover_jobs_on_startup
 from app.services.migration_service import run_startup_migrations
 
 logging.basicConfig(
@@ -23,6 +25,7 @@ logging.basicConfig(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     run_startup_migrations()
+    recover_jobs_on_startup()
     yield
 
 
@@ -93,3 +96,4 @@ def health():
 app.include_router(auth_router, prefix="/auth", tags=["Auth"])
 app.include_router(projects_router, prefix="/projects", tags=["Projects"])
 app.include_router(admin_router, prefix="/admin", tags=["Admin"])
+app.include_router(jobs_router, prefix="/jobs", tags=["Jobs"])

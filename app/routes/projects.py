@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from starlette.background import BackgroundTask
 
 from app import models
+from app.config import GENERATED_PROJECTS_DIR as GENERATED_PROJECTS_BASE
 from app.config import RATE_LIMIT_GENERATE
 from app.rate_limit import limiter
 from app.security import get_current_user, get_db
@@ -24,6 +25,8 @@ from app.services.project_builder_service import (
     build_project_response,
     build_solution_project_response,
 )
+from app.services.storage_service import ensure_local_project, persist_project
+from app.services.usage_meter import measure_llm_usage
 from app.services.usage_service import (
     assert_user_can_generate,
     register_usage,
@@ -55,7 +58,7 @@ def _generation_error(action: str, error: Exception) -> HTTPException:
     )
 
 
-GENERATED_PROJECTS_DIR = Path("generated_projects")
+GENERATED_PROJECTS_DIR = Path(GENERATED_PROJECTS_BASE)
 GENERATED_PROJECTS_DIR.mkdir(parents=True, exist_ok=True)
 
 
@@ -331,11 +334,14 @@ def _safe_project_dir(project_name: str) -> Path:
     base_dir = GENERATED_PROJECTS_DIR.resolve()
     project_dir = (base_dir / project_name).resolve()
 
-    if not str(project_dir).startswith(str(base_dir)):
+    if project_dir == base_dir or not project_dir.is_relative_to(base_dir):
         raise HTTPException(
             status_code=400,
             detail="Nome de projeto inválido.",
         )
+
+    # Se o disco local foi apagado (redeploy), recupera do armazenamento.
+    ensure_local_project(project_dir.name)
 
     if not project_dir.exists() or not project_dir.is_dir():
         raise HTTPException(
@@ -360,7 +366,7 @@ def _safe_file_path(project_name: str, filename: str) -> Path:
     project_dir = _safe_project_dir(project_name)
     file_path = (project_dir / filename).resolve()
 
-    if not str(file_path).startswith(str(project_dir.resolve())):
+    if not file_path.is_relative_to(project_dir.resolve()):
         raise HTTPException(
             status_code=400,
             detail="Nome de arquivo inválido.",
@@ -540,7 +546,173 @@ def _save_project_history(
 
 
 # ============================================================
-# Endpoints de geração protegidos com limite mensal
+# Execução das gerações (usada pelas rotas síncronas e pela fila)
+# ============================================================
+
+def _run_generate(db: Session, user: models.User, bug: str) -> Dict[str, Any]:
+    result = generate_all(bug)
+
+    if not isinstance(result, dict):
+        raise ValueError("generate_all não retornou um dicionário válido.")
+
+    return {
+        "user_story": result.get("user_story", ""),
+        "acceptance_criteria": result.get("acceptance_criteria", []),
+    }
+
+
+def _run_generate_full(db: Session, user: models.User, bug: str) -> Dict[str, Any]:
+    result = build_project_response(bug)
+
+    project_name = result.get("project_name", "")
+    project_path = result.get("project_path", "")
+    user_story = result.get("user_story", "")
+    acceptance_criteria = result.get("acceptance_criteria", [])
+    files = result.get("files", [])
+
+    persist_project(project_name)
+
+    _save_project_history(
+        db=db,
+        current_user=user,
+        bug=bug,
+        user_story=user_story,
+        acceptance_criteria=acceptance_criteria,
+        project_name=project_name,
+        project_path=project_path,
+        files=files,
+        technical_analysis=None,
+        solution_plan=[],
+        test_cases=[],
+        status="generated_full",
+    )
+
+    return {
+        "project_name": project_name,
+        "project_path": project_path,
+        "user_story": user_story,
+        "acceptance_criteria": acceptance_criteria,
+        "files": files,
+    }
+
+
+def _run_generate_solution(db: Session, user: models.User, bug: str) -> Dict[str, Any]:
+    solution = generate_solution_project(bug)
+
+    result = build_solution_project_response(
+        bug,
+        solution.get("user_story", ""),
+        solution.get("acceptance_criteria", []),
+        solution.get("technical_analysis", ""),
+        solution.get("solution_plan", []),
+        solution.get("files", {}),
+    )
+
+    project_name = result.get("project_name")
+    project_path = result.get("project_path", "")
+    user_story = result.get("user_story", "")
+    acceptance_criteria = result.get("acceptance_criteria", [])
+    technical_analysis = result.get("technical_analysis", "")
+    solution_plan = result.get("solution_plan", [])
+    test_cases = solution.get("test_cases", [])
+    files = result.get("files", [])
+
+    persist_project(project_name)
+
+    _save_project_history(
+        db=db,
+        current_user=user,
+        bug=bug,
+        user_story=user_story,
+        acceptance_criteria=acceptance_criteria,
+        project_name=project_name,
+        project_path=project_path,
+        files=files,
+        technical_analysis=technical_analysis,
+        solution_plan=solution_plan,
+        test_cases=test_cases,
+        status="generated_solution",
+    )
+
+    return {
+        "project_name": project_name,
+        "project_path": project_path,
+        "generation_mode": result.get("generation_mode", "openai_solution"),
+        "user_story": user_story,
+        "acceptance_criteria": acceptance_criteria,
+        "technical_analysis": technical_analysis,
+        "solution_plan": solution_plan,
+        "test_cases": test_cases,
+        "files": files,
+    }
+
+
+GENERATION_RUNNERS = {
+    "generate": (_run_generate, "gerar o projeto"),
+    "generate-full": (_run_generate_full, "gerar o projeto completo"),
+    "generate-solution": (_run_generate_solution, "gerar a solução técnica"),
+}
+
+
+def execute_generation(
+    kind: str,
+    db: Session,
+    user: models.User,
+    bug: str,
+) -> Dict[str, Any]:
+    """
+    Executa uma geração, medindo tokens/custo e registrando o uso.
+    Exceções são repassadas para quem chamou (rota ou fila).
+    """
+    runner, _action = GENERATION_RUNNERS[kind]
+    endpoint = f"/projects/{kind}"
+
+    error: Optional[Exception] = None
+
+    with measure_llm_usage() as llm_usage:
+        try:
+            response = runner(db, user, bug)
+        except Exception as exc:  # repassada abaixo, depois de registrar o uso
+            db.rollback()
+            error = exc
+
+    if error is not None:
+        register_usage(
+            db=db,
+            user=user,
+            endpoint=endpoint,
+            project_name=None,
+            status="failed",
+            llm_usage=llm_usage.as_log_fields(),
+        )
+        raise error
+
+    register_usage(
+        db=db,
+        user=user,
+        endpoint=endpoint,
+        project_name=response.get("project_name"),
+        status="success",
+        llm_usage=llm_usage.as_log_fields(),
+    )
+
+    return response
+
+
+def _execute_sync(kind: str, db: Session, user: models.User, bug: str) -> Dict[str, Any]:
+    assert_user_can_generate(db, user)
+
+    try:
+        return execute_generation(kind, db, user, bug)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise _generation_error(GENERATION_RUNNERS[kind][1], e)
+
+
+# ============================================================
+# Endpoints síncronos (mantidos por compatibilidade).
+# Para produção, prefira POST /jobs, que não prende a requisição.
 # ============================================================
 
 @router.post("/generate", response_model=ProjectGenerateResponse)
@@ -551,45 +723,8 @@ def generate_project(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    """
-    Gera User Story e Critérios de Aceitação a partir de um bug.
-    Endpoint protegido por autenticação e limite mensal de uso.
-    """
-
-    assert_user_can_generate(db, current_user)
-
-    try:
-        result = generate_all(payload.bug)
-
-        if not isinstance(result, dict):
-            raise ValueError("generate_all não retornou um dicionário válido.")
-
-        register_usage(
-            db=db,
-            user=current_user,
-            endpoint="/projects/generate",
-            project_name=None,
-            status="success",
-        )
-
-        return {
-            "user_story": result.get("user_story", ""),
-            "acceptance_criteria": result.get("acceptance_criteria", []),
-        }
-
-    except HTTPException:
-        raise
-
-    except Exception as e:
-        register_usage(
-            db=db,
-            user=current_user,
-            endpoint="/projects/generate",
-            project_name=None,
-            status="failed",
-        )
-
-        raise _generation_error("gerar o projeto", e)
+    """Gera User Story e Critérios de Aceitação a partir de um bug."""
+    return _execute_sync("generate", db, current_user, payload.bug)
 
 
 @router.post("/generate-full", response_model=ProjectGenerateFullResponse)
@@ -600,66 +735,8 @@ def generate_full_project(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    """
-    Gera um projeto básico completo a partir de um bug.
-    Endpoint protegido por autenticação e limite mensal de uso.
-    """
-
-    assert_user_can_generate(db, current_user)
-
-    try:
-        result = build_project_response(payload.bug)
-
-        project_name = result.get("project_name", "")
-        project_path = result.get("project_path", "")
-        user_story = result.get("user_story", "")
-        acceptance_criteria = result.get("acceptance_criteria", [])
-        files = result.get("files", [])
-
-        _save_project_history(
-            db=db,
-            current_user=current_user,
-            bug=payload.bug,
-            user_story=user_story,
-            acceptance_criteria=acceptance_criteria,
-            project_name=project_name,
-            project_path=project_path,
-            files=files,
-            technical_analysis=None,
-            solution_plan=[],
-            test_cases=[],
-            status="generated_full",
-        )
-
-        register_usage(
-            db=db,
-            user=current_user,
-            endpoint="/projects/generate-full",
-            project_name=project_name,
-            status="success",
-        )
-
-        return {
-            "project_name": project_name,
-            "project_path": project_path,
-            "user_story": user_story,
-            "acceptance_criteria": acceptance_criteria,
-            "files": files,
-        }
-
-    except HTTPException:
-        raise
-
-    except Exception as e:
-        register_usage(
-            db=db,
-            user=current_user,
-            endpoint="/projects/generate-full",
-            project_name=None,
-            status="failed",
-        )
-
-        raise _generation_error("gerar o projeto completo", e)
+    """Gera um projeto básico completo a partir de um bug."""
+    return _execute_sync("generate-full", db, current_user, payload.bug)
 
 
 @router.post("/generate-solution", response_model=ProjectGenerateSolutionResponse)
@@ -673,80 +750,8 @@ def generate_solution(
     """
     Gera User Story, Critérios de Aceitação, análise técnica,
     plano de solução, casos de teste e arquivos de projeto.
-    Endpoint protegido por autenticação e limite mensal de uso.
     """
-
-    assert_user_can_generate(db, current_user)
-
-    try:
-        solution = generate_solution_project(payload.bug)
-
-        result = build_solution_project_response(
-            payload.bug,
-            solution.get("user_story", ""),
-            solution.get("acceptance_criteria", []),
-            solution.get("technical_analysis", ""),
-            solution.get("solution_plan", []),
-            solution.get("files", {}),
-        )
-
-        project_name = result.get("project_name")
-        project_path = result.get("project_path", "")
-        user_story = result.get("user_story", "")
-        acceptance_criteria = result.get("acceptance_criteria", [])
-        technical_analysis = result.get("technical_analysis", "")
-        solution_plan = result.get("solution_plan", [])
-        test_cases = solution.get("test_cases", [])
-        files = result.get("files", [])
-
-        _save_project_history(
-            db=db,
-            current_user=current_user,
-            bug=payload.bug,
-            user_story=user_story,
-            acceptance_criteria=acceptance_criteria,
-            project_name=project_name,
-            project_path=project_path,
-            files=files,
-            technical_analysis=technical_analysis,
-            solution_plan=solution_plan,
-            test_cases=test_cases,
-            status="generated_solution",
-        )
-
-        register_usage(
-            db=db,
-            user=current_user,
-            endpoint="/projects/generate-solution",
-            project_name=project_name,
-            status="success",
-        )
-
-        return {
-            "project_name": project_name,
-            "project_path": project_path,
-            "generation_mode": result.get("generation_mode", "openai_solution"),
-            "user_story": user_story,
-            "acceptance_criteria": acceptance_criteria,
-            "technical_analysis": technical_analysis,
-            "solution_plan": solution_plan,
-            "test_cases": test_cases,
-            "files": files,
-        }
-
-    except HTTPException:
-        raise
-
-    except Exception as e:
-        register_usage(
-            db=db,
-            user=current_user,
-            endpoint="/projects/generate-solution",
-            project_name=None,
-            status="failed",
-        )
-
-        raise _generation_error("gerar a solução técnica", e)
+    return _execute_sync("generate-solution", db, current_user, payload.bug)
 
 
 # ============================================================

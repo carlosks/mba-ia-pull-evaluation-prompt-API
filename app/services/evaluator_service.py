@@ -3,7 +3,17 @@ from difflib import SequenceMatcher
 from openai import OpenAI
 import os
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+from app.config import LLM_MODEL
+
+_client = None
+
+
+def _get_client() -> OpenAI:
+    """Cria o cliente OpenAI só quando for usado (não na importação)."""
+    global _client
+    if _client is None:
+        _client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    return _client
 
 
 # =========================
@@ -64,8 +74,8 @@ USER STORY:
 Responda apenas com um número de 0 a 1.
 """
 
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
+        response = _get_client().chat.completions.create(
+            model=LLM_MODEL,
             messages=[{"role": "user", "content": prompt}],
             temperature=0
         )

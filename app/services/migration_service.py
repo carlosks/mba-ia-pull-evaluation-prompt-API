@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import logging
 import secrets
+from pathlib import Path
 
 from passlib.context import CryptContext
 from sqlalchemy import inspect, text
 from sqlalchemy.engine import Engine
 
 from app.config import CREATE_DEV_ADMIN, DEV_ADMIN_EMAIL, DEV_ADMIN_PASSWORD
-from app.database import Base, engine
+from app.database import engine
 
 logger = logging.getLogger("app.migrations")
 
@@ -100,24 +101,25 @@ def ensure_development_admin_user(engine: Engine) -> None:
         )
 
 
-def run_startup_migrations() -> None:
+def _patch_legacy_database() -> None:
     """
-    Executa migrações simples e idempotentes no startup da aplicação.
-
-    Objetivo:
-    - Evitar erro local quando app.db está antigo.
-    - Criar colunas novas na tabela users.
-    - Criar tabela usage_logs se não existir.
+    Ajustes para bancos criados antes do Alembic, deixando-os iguais à
+    revisão 0001_baseline. Roda uma única vez: depois disso o banco é
+    marcado (stamp) e só o Alembic mexe no esquema.
     """
 
-    # Cria as tabelas que ainda não existem (banco novo).
-    # Importar models registra todas as tabelas no Base.metadata.
-    from app import models  # noqa: F401
-
-    Base.metadata.create_all(bind=engine)
+    if _table_exists(engine, "users"):
+        # Inspeciona ANTES de abrir a transação: no Postgres o ALTER TABLE
+        # bloqueia a tabela e uma inspeção em outra conexão ficaria esperando.
+        existing_columns = {
+            column["name"]: column["type"]
+            for column in inspect(engine).get_columns("users")
+        }
+    else:
+        existing_columns = None
 
     with engine.begin() as conn:
-        if _table_exists(engine, "users"):
+        if existing_columns is not None:
             additions = [
                 (
                     "plan",
@@ -129,11 +131,11 @@ def run_startup_migrations() -> None:
                 ),
                 (
                     "is_active",
-                    "ALTER TABLE users ADD COLUMN is_active INTEGER DEFAULT 1",
+                    "ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT TRUE",
                 ),
                 (
                     "is_admin",
-                    "ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0",
+                    "ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT FALSE",
                 ),
                 (
                     "created_at",
@@ -142,7 +144,7 @@ def run_startup_migrations() -> None:
             ]
 
             for column_name, sql in additions:
-                if not _column_exists(engine, "users", column_name):
+                if column_name not in existing_columns:
                     conn.execute(text(sql))
 
             conn.execute(
@@ -154,29 +156,66 @@ def run_startup_migrations() -> None:
                     "WHERE monthly_generation_limit IS NULL"
                 )
             )
-            conn.execute(
-                text("UPDATE users SET is_active=1 WHERE is_active IS NULL")
-            )
-            conn.execute(
-                text("UPDATE users SET is_admin=0 WHERE is_admin IS NULL")
-            )
-
-        if not _table_exists(engine, "usage_logs"):
-            conn.execute(
-                text(
-                    """
-                    CREATE TABLE usage_logs (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        user_id INTEGER NOT NULL,
-                        endpoint TEXT NOT NULL,
-                        project_name TEXT,
-                        status TEXT NOT NULL DEFAULT 'success',
-                        created_at TEXT,
-                        FOREIGN KEY(user_id) REFERENCES users(id)
-                    )
-                    """
+            for column_name, default in (("is_active", True), ("is_admin", False)):
+                column_type = existing_columns.get(column_name)
+                # Coluna antiga criada como INTEGER: grava 1/0 em vez de true/false.
+                is_integer = column_type is not None and "INT" in str(column_type).upper()
+                value = int(default) if is_integer else default
+                conn.execute(
+                    text(f"UPDATE users SET {column_name}=:v WHERE {column_name} IS NULL"),
+                    {"v": value},
                 )
-            )
+
+    if not _table_exists(engine, "usage_logs"):
+        # Só as colunas da revisão 0001; as de custo chegam pela 0002.
+        import sqlalchemy as sa
+
+        metadata = sa.MetaData()
+        sa.Table("users", metadata, sa.Column("id", sa.Integer, primary_key=True))
+        usage_logs = sa.Table(
+            "usage_logs",
+            metadata,
+            sa.Column("id", sa.Integer, primary_key=True, index=True),
+            sa.Column("user_id", sa.Integer, sa.ForeignKey("users.id"), nullable=False),
+            sa.Column("endpoint", sa.String, nullable=False),
+            sa.Column("project_name", sa.String),
+            sa.Column("status", sa.String, nullable=False, server_default="success"),
+            sa.Column("created_at", sa.DateTime, index=True),
+        )
+        usage_logs.create(bind=engine)
+
+
+def _alembic_config():
+    from alembic.config import Config
+
+    repo_root = Path(__file__).resolve().parents[2]
+    config = Config(str(repo_root / "alembic.ini"))
+    config.set_main_option("script_location", str(repo_root / "alembic"))
+    return config
+
+
+def run_startup_migrations() -> None:
+    """
+    Deixa o banco na versão mais recente no startup da aplicação.
+
+    - Banco novo (vazio): o Alembic cria tudo.
+    - Banco antigo, anterior ao Alembic: aplica os ajustes legados,
+      marca como 0001_baseline e depois aplica o restante.
+    - Banco já versionado: aplica só as migrações pendentes.
+    """
+    from alembic import command
+
+    config = _alembic_config()
+
+    has_version_table = _table_exists(engine, "alembic_version")
+    is_legacy_database = _table_exists(engine, "users") and not has_version_table
+
+    if is_legacy_database:
+        logger.info("Banco anterior ao Alembic detectado; aplicando ajustes legados.")
+        _patch_legacy_database()
+        command.stamp(config, "0001_baseline")
+
+    command.upgrade(config, "head")
 
     ensure_development_admin_user(engine)
     logger.info("Database migrations checked successfully.")

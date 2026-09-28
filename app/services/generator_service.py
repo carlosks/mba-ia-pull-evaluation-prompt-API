@@ -9,6 +9,8 @@ from typing import Any, Dict, List, Optional
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 
+from app.config import LLM_MODEL
+
 
 _llm: Optional[ChatOpenAI] = None
 
@@ -30,7 +32,7 @@ def get_llm() -> ChatOpenAI:
             )
 
         _llm = ChatOpenAI(
-            model=os.getenv("LLM_MODEL", "gpt-4o-mini"),
+            model=LLM_MODEL,
             temperature=0.2,
             api_key=api_key,
         )

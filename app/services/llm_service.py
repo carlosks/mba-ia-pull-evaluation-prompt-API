@@ -1,8 +1,9 @@
+from app.config import LLM_MODEL
 from langchain_openai import ChatOpenAI
 
 
 def get_llm():
-    return ChatOpenAI(model="gpt-4o-mini", temperature=0)
+    return ChatOpenAI(model=LLM_MODEL, temperature=0)
 
 
 def generate_user_story(bug: str):
