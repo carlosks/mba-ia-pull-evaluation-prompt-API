@@ -300,6 +300,11 @@ async function handleRegister(event) {
 
   setMessage("registerMessage", "Criando conta...");
 
+  if (password.length < 8) {
+    setMessage("registerMessage", "A senha precisa ter pelo menos 8 caracteres.", "error");
+    return;
+  }
+
   if (password !== passwordConfirm) {
     setMessage("registerMessage", "As senhas não conferem.", "error");
     return;
@@ -320,7 +325,10 @@ async function handleRegister(event) {
     const data = await safeJson(response);
 
     if (!response.ok) {
-      throw new Error(data.detail || "Erro ao criar conta.");
+      const detail = Array.isArray(data.detail)
+        ? "Dados inválidos. Verifique o e-mail e a senha (mínimo de 8 caracteres)."
+        : data.detail;
+      throw new Error(detail || "Erro ao criar conta.");
     }
 
     setMessage(

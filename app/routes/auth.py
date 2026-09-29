@@ -1,12 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
 from app import models
-from app.database import SessionLocal
+from app.config import RATE_LIMIT_LOGIN, RATE_LIMIT_REGISTER
+from app.rate_limit import limiter
 from app.schemas.auth import UserCreate, UserOut, Token
-from app.security import create_access_token, get_current_user
+from app.security import create_access_token, get_current_user, get_db
 from app.services.usage_service import (
     ensure_user_plan_defaults,
     get_usage_summary,
@@ -19,20 +20,19 @@ router = APIRouter()
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
 def hash_password(password: str) -> str:
     return pwd_context.hash(password[:72])
 
 
 def verify_password(plain: str, hashed: str) -> bool:
     return pwd_context.verify(plain[:72], hashed)
+
+
+# Hash usado quando o e-mail não existe, para que o tempo de resposta do
+# login seja o mesmo e não revele quais e-mails estão cadastrados.
+_DUMMY_HASH = pwd_context.hash("senha-inexistente-para-equalizar-tempo")
+
+INVALID_LOGIN_MESSAGE = "E-mail ou senha inválidos."
 
 
 def build_user_out(db: Session, user: models.User) -> dict:
@@ -55,7 +55,8 @@ def build_user_out(db: Session, user: models.User) -> dict:
 
 
 @router.post("/register", response_model=UserOut)
-def register(data: UserCreate, db: Session = Depends(get_db)):
+@limiter.limit(RATE_LIMIT_REGISTER)
+def register(request: Request, data: UserCreate, db: Session = Depends(get_db)):
     existing_user = db.query(models.User).filter(
         models.User.email == data.email
     ).first()
@@ -85,7 +86,9 @@ def register(data: UserCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=Token)
+@limiter.limit(RATE_LIMIT_LOGIN)
 def login(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db),
 ):
@@ -94,21 +97,17 @@ def login(
     ).first()
 
     if not user:
-        raise HTTPException(
-            status_code=401,
-            detail="Usuário não encontrado",
-        )
+        verify_password(form_data.password, _DUMMY_HASH)
+        raise HTTPException(status_code=401, detail=INVALID_LOGIN_MESSAGE)
 
+    if not verify_password(form_data.password, user.hashed_password):
+        raise HTTPException(status_code=401, detail=INVALID_LOGIN_MESSAGE)
+
+    # Só informamos que a conta está inativa depois de a senha ser validada.
     if not user.is_active:
         raise HTTPException(
             status_code=403,
             detail="Usuário inativo.",
-        )
-
-    if not verify_password(form_data.password, user.hashed_password):
-        raise HTTPException(
-            status_code=401,
-            detail="Senha inválida",
         )
 
     ensure_user_plan_defaults(db, user)
