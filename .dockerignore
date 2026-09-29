@@ -4,7 +4,8 @@ venv/
 __pycache__/
 *.pyc
 .git/
-generated_projects/*.db
+generated_projects/
+*.db
 *.docx
 *.zip
 generated/
