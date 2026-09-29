@@ -108,3 +108,47 @@ RATE_LIMIT_ENABLED = _env_bool("RATE_LIMIT_ENABLED", default=True)
 RATE_LIMIT_LOGIN = os.getenv("RATE_LIMIT_LOGIN", "10/minute")
 RATE_LIMIT_REGISTER = os.getenv("RATE_LIMIT_REGISTER", "5/minute")
 RATE_LIMIT_GENERATE = os.getenv("RATE_LIMIT_GENERATE", "6/minute")
+
+
+# ------------------------------------------------------------
+# LLM e custo
+# ------------------------------------------------------------
+
+LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")
+
+# Preço em US$ por 1 milhão de tokens do modelo configurado.
+# Padrões = preço público do gpt-4o-mini; confira a tabela da OpenAI
+# e ajuste ao trocar de modelo.
+LLM_PRICE_INPUT_PER_1M = float(os.getenv("LLM_PRICE_INPUT_PER_1M", "0.15"))
+LLM_PRICE_OUTPUT_PER_1M = float(os.getenv("LLM_PRICE_OUTPUT_PER_1M", "0.60"))
+
+
+# ------------------------------------------------------------
+# Fila de gerações
+# ------------------------------------------------------------
+
+# Quantas gerações rodam ao mesmo tempo nesta instância.
+JOB_WORKERS = int(os.getenv("JOB_WORKERS", "2"))
+
+# Quantas gerações o mesmo usuário pode ter na fila ao mesmo tempo.
+MAX_PENDING_JOBS_PER_USER = int(os.getenv("MAX_PENDING_JOBS_PER_USER", "2"))
+
+
+# ------------------------------------------------------------
+# Armazenamento dos projetos gerados
+# ------------------------------------------------------------
+
+# Pasta local (cache de trabalho). No Render, aponte para um Disk
+# persistente ou configure o armazenamento S3 abaixo.
+# Caminhos relativos são resolvidos a partir da raiz do repositório.
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+GENERATED_PROJECTS_DIR = os.path.join(
+    _REPO_ROOT, os.getenv("GENERATED_PROJECTS_DIR", "generated_projects")
+)
+
+# Armazenamento de objetos compatível com S3 (AWS S3, Cloudflare R2, MinIO...).
+# Se STORAGE_BUCKET ficar vazio, os projetos ficam só no disco local.
+STORAGE_BUCKET = os.getenv("STORAGE_BUCKET", "").strip()
+STORAGE_ENDPOINT_URL = os.getenv("STORAGE_ENDPOINT_URL", "").strip() or None
+STORAGE_REGION = os.getenv("STORAGE_REGION", "auto")
+STORAGE_PREFIX = os.getenv("STORAGE_PREFIX", "generated_projects/").strip()

@@ -174,3 +174,59 @@ def update_user_admin(
     db.refresh(user)
 
     return user
+
+@router.get("/usage-costs")
+def usage_costs(
+    days: int = 30,
+    db: Session = Depends(get_db),
+    admin_user: models.User = Depends(require_admin),
+):
+    """
+    Custo do LLM por plano nos últimos N dias: quantidade de gerações,
+    tokens e custo em US$ (total e médio por geração bem-sucedida).
+    Base para definir preço e limites de cada plano.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import func
+
+    since = datetime.now(timezone.utc) - timedelta(days=max(days, 1))
+
+    rows = (
+        db.query(
+            models.User.plan,
+            models.UsageLog.status,
+            func.count(models.UsageLog.id),
+            func.coalesce(func.sum(models.UsageLog.input_tokens), 0),
+            func.coalesce(func.sum(models.UsageLog.output_tokens), 0),
+            func.coalesce(func.sum(models.UsageLog.cost_usd), 0.0),
+        )
+        .join(models.User, models.User.id == models.UsageLog.user_id)
+        .filter(models.UsageLog.created_at >= since)
+        .group_by(models.User.plan, models.UsageLog.status)
+        .all()
+    )
+
+    plans: dict = {}
+    for plan, status, count, tokens_in, tokens_out, cost in rows:
+        item = plans.setdefault(
+            plan or "free",
+            {
+                "generations_success": 0,
+                "generations_failed": 0,
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "cost_usd": 0.0,
+            },
+        )
+        item["generations_success" if status == "success" else "generations_failed"] += count
+        item["input_tokens"] += int(tokens_in)
+        item["output_tokens"] += int(tokens_out)
+        item["cost_usd"] += float(cost)
+
+    for item in plans.values():
+        success = item["generations_success"]
+        item["avg_cost_per_generation_usd"] = round(item["cost_usd"] / success, 6) if success else None
+        item["cost_usd"] = round(item["cost_usd"], 4)
+
+    return {"days": days, "since": since.isoformat(), "plans": plans}

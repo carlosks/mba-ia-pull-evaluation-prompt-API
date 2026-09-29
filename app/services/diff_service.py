@@ -1,3 +1,4 @@
+from app.config import LLM_MODEL
 import difflib
 from langchain_openai import ChatOpenAI
 
@@ -16,7 +17,7 @@ def generate_diff(old: str, new: str):
 
 
 def explain_changes(bug: str, old: str, new: str):
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+    llm = ChatOpenAI(model=LLM_MODEL, temperature=0)
 
     prompt = f"""
 Explique de forma simples o que mudou entre duas user stories.

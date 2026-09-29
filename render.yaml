@@ -17,3 +17,15 @@ services:
         sync: false
       - key: DATABASE_URL
         sync: false
+      - key: JOB_WORKERS
+        value: "2"
+      # Armazenamento durável dos projetos (ex.: Cloudflare R2).
+      # Sem ele, os projetos gerados somem a cada deploy.
+      - key: STORAGE_BUCKET
+        sync: false
+      - key: STORAGE_ENDPOINT_URL
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false

@@ -1,3 +1,4 @@
+from app.config import LLM_MODEL
 import re
 import unicodedata
 from sklearn.metrics.pairwise import cosine_similarity
@@ -88,7 +89,7 @@ def structure_score(story: str):
 # ==============================
 
 def llm_judge(bug: str, story: str):
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+    llm = ChatOpenAI(model=LLM_MODEL, temperature=0)
 
     prompt = f"""
 Avalie a qualidade desta user story em relação ao bug.

@@ -427,6 +427,44 @@ async function loadDashboard() {
   }
 }
 
+// ============================================================
+// Fila de gerações: cria o job e consulta o status até terminar.
+// ============================================================
+
+const JOB_POLL_INTERVAL_MS = 2000;
+const JOB_MAX_WAIT_MS = 10 * 60 * 1000;
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function runGenerationJob(kind, bug, onProgress) {
+  const job = await apiPost("/jobs", { kind, bug });
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < JOB_MAX_WAIT_MS) {
+    const current = await apiGet(`/jobs/${encodeURIComponent(job.id)}`);
+
+    if (current.status === "succeeded") {
+      return current.result;
+    }
+
+    if (current.status === "failed") {
+      throw new Error(current.error_message || "A geração falhou.");
+    }
+
+    if (onProgress) {
+      onProgress(current.status, Math.round((Date.now() - startedAt) / 1000));
+    }
+
+    await sleep(JOB_POLL_INTERVAL_MS);
+  }
+
+  throw new Error(
+    "A geração está demorando mais que o normal. Ela continua em andamento; confira o histórico em alguns minutos."
+  );
+}
+
 async function generateSolution() {
   const bugInput = document.getElementById("bugInput");
 
@@ -442,10 +480,13 @@ async function generateSolution() {
   }
 
   clearSolutionResult();
-  setMessage("generateMessage", "Gerando solução técnica. Aguarde...");
+  setMessage("generateMessage", "Enviando para a fila de geração...");
 
   try {
-    const data = await apiPost("/projects/generate-solution", { bug });
+    const data = await runGenerationJob("generate-solution", bug, (status, seconds) => {
+      const label = status === "queued" ? "Na fila" : "Gerando solução técnica";
+      setMessage("generateMessage", `${label}... (${seconds}s) Você pode continuar usando o sistema.`);
+    });
 
     setMessage("generateMessage", "Solução gerada com sucesso.", "success");
 

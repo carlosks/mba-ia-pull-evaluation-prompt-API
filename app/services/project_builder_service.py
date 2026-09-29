@@ -8,8 +8,7 @@ def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-GENERATED_PROJECTS_DIR = os.path.join(BASE_DIR, "generated_projects")
+from app.config import GENERATED_PROJECTS_DIR  # noqa: E402
 
 
 # ============================================================

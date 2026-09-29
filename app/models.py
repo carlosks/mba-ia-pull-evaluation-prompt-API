@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 
 from app.database import Base
@@ -93,6 +93,49 @@ class UsageLog(Base):
     # success, failed, blocked
     status = Column(String, nullable=False, default="success")
 
+    # Consumo do LLM nesta geração (para medir margem por plano).
+    model = Column(String)
+    input_tokens = Column(Integer)
+    output_tokens = Column(Integer)
+    cost_usd = Column(Float)
+    duration_ms = Column(Integer)
+
     created_at = Column(DateTime, default=utc_now, index=True)
 
     user = relationship("User", back_populates="usage_logs")
+
+
+class GenerationJob(Base):
+    """
+    Geração executada em segundo plano.
+
+    O cliente cria o job, recebe o id na hora e consulta o status
+    até ficar succeeded ou failed. Assim a requisição HTTP não fica
+    presa esperando o LLM.
+    """
+
+    __tablename__ = "generation_jobs"
+
+    id = Column(String(36), primary_key=True)
+
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+
+    # generate | generate-full | generate-solution
+    kind = Column(String, nullable=False)
+
+    # queued | running | succeeded | failed
+    status = Column(String, nullable=False, default="queued", index=True)
+
+    bug = Column(Text, nullable=False)
+
+    # Resposta completa (JSON) quando succeeded.
+    result_json = Column(Text)
+
+    # Mensagem amigável quando failed (sem detalhes internos).
+    error_message = Column(Text)
+
+    project_name = Column(String)
+
+    created_at = Column(DateTime, default=utc_now, index=True)
+    started_at = Column(DateTime)
+    finished_at = Column(DateTime)
