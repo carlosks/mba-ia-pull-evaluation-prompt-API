@@ -35,6 +35,10 @@ class User(Base):
 
     created_at = Column(DateTime, default=utc_now)
 
+    # Aceite dos Termos de Uso e da Política de Privacidade (LGPD).
+    terms_version = Column(String, nullable=True)
+    terms_accepted_at = Column(DateTime, nullable=True)
+
     projects = relationship(
         "Project",
         back_populates="owner",

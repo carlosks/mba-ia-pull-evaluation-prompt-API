@@ -45,6 +45,18 @@
 
         <label for="checkoutDocument">CPF ou CNPJ</label>
         <input id="checkoutDocument" type="text" inputmode="numeric" placeholder="Somente números ou com pontuação" required />
+        <p class="muted small">
+          Nome e CPF/CNPJ são enviados à Asaas apenas para emitir a cobrança.
+        </p>
+
+        <label class="checkbox-line" for="checkoutAcceptTerms">
+          <input id="checkoutAcceptTerms" type="checkbox" required />
+          <span>
+            Li e aceito os <a href="/static/termos.html" target="_blank" rel="noopener">Termos de Uso</a>
+            e a <a href="/static/privacidade.html" target="_blank" rel="noopener">Política de Privacidade</a>,
+            incluindo a renovação mensal automática até o cancelamento.
+          </span>
+        </label>
 
         <div class="actions">
           <button type="submit">Ir para o pagamento</button>
@@ -55,6 +67,13 @@
       <p id="checkoutMessage" class="message"></p>
     </section>
   </main>
+
+  <footer class="app-footer">
+    <a href="/static/termos.html">Termos de Uso</a> ·
+    <a href="/static/privacidade.html">Política de Privacidade</a> ·
+    <a data-legal-mailto href="#">Contato</a>
+    <p class="legal-seller" data-legal-seller></p>
+  </footer>
 
   <script src="/static/app.js"></script>
   <script>

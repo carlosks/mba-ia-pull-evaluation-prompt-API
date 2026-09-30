@@ -8,6 +8,7 @@ from app.config import RATE_LIMIT_LOGIN, RATE_LIMIT_REGISTER
 from app.rate_limit import limiter
 from app.schemas.auth import UserCreate, UserOut, Token
 from app.security import create_access_token, get_current_user, get_db
+from app.services import legal_service
 from app.services.usage_service import (
     ensure_user_plan_defaults,
     get_usage_summary,
@@ -51,12 +52,16 @@ def build_user_out(db: Session, user: models.User) -> dict:
         "remaining_generations": usage["remaining_generations"],
         "is_active": bool(user.is_active),
         "is_admin": bool(user.is_admin),
+        "terms_accepted": legal_service.has_current_terms(user),
     }
 
 
 @router.post("/register", response_model=UserOut)
 @limiter.limit(RATE_LIMIT_REGISTER)
 def register(request: Request, data: UserCreate, db: Session = Depends(get_db)):
+    if not data.accept_terms:
+        raise HTTPException(status_code=400, detail=legal_service.TERMS_REQUIRED_MESSAGE)
+
     existing_user = db.query(models.User).filter(
         models.User.email == data.email
     ).first()
@@ -77,6 +82,7 @@ def register(request: Request, data: UserCreate, db: Session = Depends(get_db)):
         is_active=True,
         is_admin=False,
     )
+    legal_service.record_acceptance(new_user)
 
     db.add(new_user)
     db.commit()

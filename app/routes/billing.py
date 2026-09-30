@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app import config, models
 from app.security import get_current_user, get_db
-from app.services import billing_service
+from app.services import billing_service, legal_service
 
 router = APIRouter(tags=["Billing"])
 logger = logging.getLogger("app.billing")
@@ -46,6 +46,9 @@ class CheckoutRequest(BaseModel):
     plan: Literal["pro", "team"]
     name: str = Field(..., min_length=3, max_length=120)
     cpf_cnpj: str = Field(..., min_length=11, max_length=20)
+    # Obrigatório para quem ainda não aceitou a versão vigente dos termos
+    # (ex.: contas criadas antes dos Termos de Uso existirem).
+    accept_terms: bool = False
 
 
 class CheckoutOut(BaseModel):
@@ -83,6 +86,7 @@ def checkout(
     O cliente paga na página da Asaas (Pix, boleto ou cartão); o plano é
     liberado quando o webhook confirma o pagamento.
     """
+    legal_service.require_terms(db, current_user, payload.accept_terms)
     return billing_service.start_checkout(
         db, current_user, payload.plan, payload.name, payload.cpf_cnpj
     )

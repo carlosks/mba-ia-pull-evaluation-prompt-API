@@ -26,6 +26,14 @@
         <label for="registerPasswordConfirm">Confirmar senha</label>
         <input id="registerPasswordConfirm" type="password" placeholder="Confirme a senha" required />
 
+        <label class="checkbox-line" for="registerAcceptTerms">
+          <input id="registerAcceptTerms" type="checkbox" required />
+          <span>
+            Li e aceito os <a href="/static/termos.html" target="_blank" rel="noopener">Termos de Uso</a>
+            e a <a href="/static/privacidade.html" target="_blank" rel="noopener">Política de Privacidade</a>.
+          </span>
+        </label>
+
         <button type="submit">Criar conta</button>
       </form>
 
@@ -33,6 +41,12 @@
 
       <p class="muted small">
         Já tem conta? <a href="/static/login.html">Entrar</a>
+      </p>
+
+      <p class="auth-legal-links">
+        <a href="/static/index.html">Página inicial</a> ·
+        <a href="/static/termos.html">Termos</a> ·
+        <a href="/static/privacidade.html">Privacidade</a>
       </p>
     </section>
   </main>
