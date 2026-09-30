@@ -90,7 +90,7 @@ def env(monkeypatch):
 
 
 def _checkout(client, headers, plan="pro"):
-    return client.post("/billing/checkout", json={"plan": plan, "name": "Ana Souza", "cpf_cnpj": CPF_VALIDO}, headers=headers)
+    return client.post("/billing/checkout", json={"plan": plan, "name": "Ana Souza", "cpf_cnpj": CPF_VALIDO, "accept_terms": True}, headers=headers)
 
 
 def _webhook(client, event_id, event, **resource):
@@ -146,7 +146,7 @@ def test_checkout_again_reuses_pending_invoice(env):
 
 def test_checkout_rejects_invalid_cpf(env):
     client, _, headers, fake = env
-    response = client.post("/billing/checkout", json={"plan": "pro", "name": "Ana Souza", "cpf_cnpj": "111.111.111-11"}, headers=headers)
+    response = client.post("/billing/checkout", json={"plan": "pro", "name": "Ana Souza", "cpf_cnpj": "111.111.111-11", "accept_terms": True}, headers=headers)
     assert response.status_code == 400
     assert fake.calls == []
 

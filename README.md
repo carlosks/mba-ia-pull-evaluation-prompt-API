@@ -113,3 +113,14 @@ Configuração: `ASAAS_BASE_URL`, `ASAAS_API_KEY`, `ASAAS_WEBHOOK_TOKEN`,
 `PLAN_PRICE_PRO`, `PLAN_PRICE_TEAM`. Sem `ASAAS_API_KEY`, a página de planos mostra
 "Em breve" e o checkout fica desligado. Usuários admin nunca têm o plano alterado
 pela cobrança.
+
+## Página de vendas, Termos de Uso e Privacidade (LGPD)
+
+- `/` abre a página de vendas pública (`app/static/index.html`), com os planos
+  lidos de `GET /billing/plans`.
+- `app/static/termos.html` e `app/static/privacidade.html` recebem nome,
+  CPF/CNPJ e e-mail do vendedor de `GET /legal/info`, alimentado pelas variáveis
+  `SELLER_NAME`, `SELLER_DOCUMENT`, `CONTACT_EMAIL` e `SELLER_CITY`.
+- O cadastro exige o aceite dos termos; a data e a versão (`TERMS_VERSION`) ficam
+  em `users.terms_accepted_at` / `users.terms_version`. Contas sem o aceite da
+  versão vigente precisam marcá-lo ao assinar um plano.

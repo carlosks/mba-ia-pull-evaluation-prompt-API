@@ -13,6 +13,7 @@ from app.routes.admin import router as admin_router
 from app.routes.auth import router as auth_router
 from app.routes.billing import router as billing_router
 from app.routes.jobs import router as jobs_router
+from app.routes.legal import router as legal_router
 from app.routes.projects import router as projects_router
 from app.services.jobs_service import recover_jobs_on_startup
 from app.services.migration_service import run_startup_migrations
@@ -88,7 +89,7 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 @app.get("/")
 def root():
-    return RedirectResponse(url="/static/login.html")
+    return RedirectResponse(url="/static/index.html")
 
 
 @app.get("/health")
@@ -103,3 +104,4 @@ app.include_router(projects_router, prefix="/projects", tags=["Projects"])
 app.include_router(admin_router, prefix="/admin", tags=["Admin"])
 app.include_router(jobs_router, prefix="/jobs", tags=["Jobs"])
 app.include_router(billing_router, prefix="/billing", tags=["Billing"])
+app.include_router(legal_router, prefix="/legal", tags=["Legal"])

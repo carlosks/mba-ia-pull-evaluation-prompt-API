@@ -2,22 +2,219 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="refresh" content="0; url=/static/login.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>MBA IA - Bug Evaluation</title>
+  <title>MBA IA - Bug Evaluation | Do relato do bug à solução</title>
+  <meta name="description" content="Descreva um bug em português e receba user story, critérios de aceitação, análise técnica, plano de solução, casos de teste e um projeto inicial para baixar." />
   <link rel="stylesheet" href="/static/style.css" />
 </head>
-<body>
-  <main class="auth-container">
-    <section class="auth-card">
-      <h1>MBA IA</h1>
-      <h2>Bug Evaluation API</h2>
-      <p>Redirecionando para o login...</p>
-      <p>
-        Se não redirecionar automaticamente,
-        <a href="/static/login.html">clique aqui</a>.
-      </p>
+<body class="site">
+  <header class="site-header">
+    <div class="site-wrap site-header-inner">
+      <a class="site-brand" href="/static/index.html">MBA IA <span>Bug Evaluation</span></a>
+
+      <nav class="site-nav">
+        <a href="#como-funciona">Como funciona</a>
+        <a href="#planos">Planos</a>
+        <a href="#perguntas">Dúvidas</a>
+        <a id="siteLoginLink" href="/static/login.html">Entrar</a>
+        <a id="siteCtaLink" class="site-button" href="/static/register.html">Criar conta grátis</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="site-wrap hero-inner">
+        <div class="hero-copy">
+          <p class="eyebrow">Inteligência artificial para times de software</p>
+          <h1>Do relato do bug à solução pronta para o time.</h1>
+          <p class="hero-lead">
+            Descreva o problema em português, do jeito que chegou no chamado.
+            Em poucos minutos você recebe a user story, os critérios de aceitação,
+            a análise técnica, o plano de solução, os casos de teste e um projeto inicial para baixar.
+          </p>
+
+          <div class="hero-actions">
+            <a class="site-button site-button-lg" href="/static/register.html">Começar grátis</a>
+            <a class="site-link" href="#planos">Ver planos e preços</a>
+          </div>
+
+          <p class="hero-note">5 gerações por mês no plano Free, sem cartão de crédito.</p>
+        </div>
+
+        <aside class="hero-sample" aria-label="Exemplo de resultado">
+          <div class="sample-input">
+            <span class="sample-label">Bug relatado</span>
+            <p>Ao cadastrar fornecedor com CNPJ válido, o sistema salva só a razão social e perde endereço e contatos.</p>
+          </div>
+
+          <div class="sample-arrow" aria-hidden="true">↓</div>
+
+          <ul class="sample-output">
+            <li><strong>User story</strong> Como comprador, quero salvar o cadastro completo do fornecedor…</li>
+            <li><strong>Critérios de aceitação</strong> Dado um CNPJ válido, quando salvo, então endereço e contatos…</li>
+            <li><strong>Plano de solução</strong> Revisar o mapeamento do formulário e a transação de gravação…</li>
+            <li><strong>Casos de teste</strong> 6 cenários, incluindo CNPJ inválido e contato duplicado</li>
+            <li><strong>Projeto .zip</strong> main.py, requirements.txt e README validados</li>
+          </ul>
+        </aside>
+      </div>
+    </section>
+
+    <section class="site-section">
+      <div class="site-wrap">
+        <h2 class="section-title">O que você recebe em cada geração</h2>
+
+        <div class="feature-grid">
+          <article class="feature">
+            <h3>User story</h3>
+            <p>O bug reescrito como necessidade do usuário, pronto para entrar no backlog.</p>
+          </article>
+          <article class="feature">
+            <h3>Critérios de aceitação</h3>
+            <p>Condições objetivas para saber quando a correção está pronta.</p>
+          </article>
+          <article class="feature">
+            <h3>Análise técnica</h3>
+            <p>Causas prováveis e pontos do sistema que precisam ser verificados.</p>
+          </article>
+          <article class="feature">
+            <h3>Plano de solução</h3>
+            <p>Passo a passo da correção para o desenvolvedor seguir.</p>
+          </article>
+          <article class="feature">
+            <h3>Casos de teste</h3>
+            <p>Cenários de teste, incluindo os caminhos de erro, para o QA validar a entrega.</p>
+          </article>
+          <article class="feature">
+            <h3>Projeto para baixar</h3>
+            <p>Código inicial em Python com README e dependências, checado automaticamente antes da entrega.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="como-funciona" class="site-section site-section-alt">
+      <div class="site-wrap">
+        <h2 class="section-title">Como funciona</h2>
+
+        <ol class="steps">
+          <li>
+            <span class="step-number">1</span>
+            <h3>Crie sua conta</h3>
+            <p>Só e-mail e senha. O plano Free já libera 5 gerações por mês.</p>
+          </li>
+          <li>
+            <span class="step-number">2</span>
+            <h3>Descreva o bug</h3>
+            <p>Cole o texto do chamado ou escreva com suas palavras. Não precisa de formato especial.</p>
+          </li>
+          <li>
+            <span class="step-number">3</span>
+            <h3>Use o resultado</h3>
+            <p>Leve a user story e os testes para o time, e baixe o projeto. Tudo fica salvo no seu histórico.</p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <section id="planos" class="site-section">
+      <div class="site-wrap">
+        <h2 class="section-title">Planos</h2>
+        <p class="section-lead">Mensal, sem fidelidade. Pague com Pix, boleto ou cartão e cancele quando quiser.</p>
+
+        <div id="publicPlans" class="price-grid">
+          <article class="price-card">
+            <h3>Free</h3>
+            <p class="price">Grátis</p>
+            <p class="price-limit">5 gerações por mês</p>
+            <a class="site-button site-button-outline" href="/static/register.html">Criar conta</a>
+          </article>
+          <article class="price-card price-card-featured">
+            <h3>Pro</h3>
+            <p class="price">R$ 49,90<span>/mês</span></p>
+            <p class="price-limit">100 gerações por mês</p>
+            <a class="site-button" href="/static/register.html">Assinar o Pro</a>
+          </article>
+          <article class="price-card">
+            <h3>Team</h3>
+            <p class="price">R$ 199,90<span>/mês</span></p>
+            <p class="price-limit">1000 gerações por mês</p>
+            <a class="site-button site-button-outline" href="/static/register.html">Assinar o Team</a>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="perguntas" class="site-section site-section-alt">
+      <div class="site-wrap faq">
+        <h2 class="section-title">Dúvidas frequentes</h2>
+
+        <details>
+          <summary>Preciso de cartão para testar?</summary>
+          <p>Não. O plano Free não pede nenhum dado de pagamento. Você só informa CPF ou CNPJ se decidir assinar um plano pago.</p>
+        </details>
+
+        <details>
+          <summary>Como funciona o pagamento?</summary>
+          <p>A cobrança é mensal e processada pela Asaas, instituição de pagamento autorizada pelo Banco Central. Você escolhe Pix, boleto ou cartão na própria página da Asaas. Não recebemos nem guardamos dados de cartão. O plano é liberado assim que o pagamento é confirmado.</p>
+        </details>
+
+        <details>
+          <summary>Posso cancelar quando quiser?</summary>
+          <p>Sim, com um clique na página Planos. Não há multa. Você continua com o plano até o fim do período já pago e depois volta para o Free.</p>
+        </details>
+
+        <details>
+          <summary>E se eu me arrepender da compra?</summary>
+          <p>Pelo Código de Defesa do Consumidor, você pode desistir em até 7 dias após a primeira contratação e receber o valor pago de volta. É só escrever para o e-mail de contato no rodapé.</p>
+        </details>
+
+        <details>
+          <summary>O que acontece com o texto que eu envio?</summary>
+          <p>A descrição do bug é enviada à OpenAI para gerar o resultado e fica salva no seu histórico. Não inclua senhas, dados pessoais de clientes ou informações sigilosas. Os detalhes estão na <a href="/static/privacidade.html">Política de Privacidade</a>.</p>
+        </details>
+
+        <details>
+          <summary>O resultado pode ser usado direto em produção?</summary>
+          <p>O conteúdo é gerado por inteligência artificial e é um ponto de partida. Revise e teste antes de usar em um sistema real.</p>
+        </details>
+      </div>
+    </section>
+
+    <section class="site-section cta-band">
+      <div class="site-wrap cta-band-inner">
+        <h2>Seu próximo bug pode chegar com a solução pronta.</h2>
+        <a class="site-button site-button-lg site-button-light" href="/static/register.html">Criar conta grátis</a>
+      </div>
     </section>
   </main>
+
+  <footer class="site-footer">
+    <div class="site-wrap site-footer-inner">
+      <div>
+        <strong>MBA IA - Bug Evaluation</strong>
+        <p class="legal-seller" data-legal-seller></p>
+      </div>
+      <nav>
+        <a href="/static/termos.html">Termos de Uso</a>
+        <a href="/static/privacidade.html">Política de Privacidade</a>
+        <a data-legal-mailto href="#">Contato</a>
+      </nav>
+    </div>
+  </footer>
+
+  <script src="/static/app.js"></script>
+  <script>
+    loadPublicPlans();
+
+    // Quem já está logado vai direto para o dashboard.
+    if (getToken()) {
+      document.getElementById("siteLoginLink").classList.add("hidden");
+      const cta = document.getElementById("siteCtaLink");
+      cta.textContent = "Ir para o dashboard";
+      cta.href = "/static/dashboard.html";
+    }
+  </script>
 </body>
 </html>

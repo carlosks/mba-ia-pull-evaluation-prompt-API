@@ -29,6 +29,7 @@ function requireAuth() {
 
 function logout() {
   clearToken();
+  localStorage.removeItem("meusProjetosFiltros");
   window.location.href = "/static/login.html";
 }
 
@@ -297,6 +298,8 @@ async function handleRegister(event) {
   const email = document.getElementById("registerEmail").value.trim();
   const password = document.getElementById("registerPassword").value;
   const passwordConfirm = document.getElementById("registerPasswordConfirm").value;
+  const acceptTermsInput = document.getElementById("registerAcceptTerms");
+  const accept_terms = acceptTermsInput ? acceptTermsInput.checked : false;
 
   setMessage("registerMessage", "Criando conta...");
 
@@ -310,6 +313,11 @@ async function handleRegister(event) {
     return;
   }
 
+  if (!accept_terms) {
+    setMessage("registerMessage", "Para criar a conta, aceite os Termos de Uso e a Política de Privacidade.", "error");
+    return;
+  }
+
   try {
     const response = await fetch(`${API_BASE}/auth/register`, {
       method: "POST",
@@ -318,7 +326,8 @@ async function handleRegister(event) {
       },
       body: JSON.stringify({
         email,
-        password
+        password,
+        accept_terms
       })
     });
 
@@ -1635,11 +1644,18 @@ async function handleCheckout(event) {
   const plan = document.getElementById("checkoutPlan").value;
   const name = document.getElementById("checkoutName").value.trim();
   const cpf_cnpj = document.getElementById("checkoutDocument").value.trim();
+  const acceptTermsInput = document.getElementById("checkoutAcceptTerms");
+  const accept_terms = acceptTermsInput ? acceptTermsInput.checked : false;
+
+  if (!accept_terms) {
+    setMessage("checkoutMessage", "Para assinar, aceite os Termos de Uso e a Política de Privacidade.", "error");
+    return;
+  }
 
   setMessage("checkoutMessage", "Gerando sua fatura...");
 
   try {
-    const data = await apiPost("/billing/checkout", { plan, name, cpf_cnpj });
+    const data = await apiPost("/billing/checkout", { plan, name, cpf_cnpj, accept_terms });
 
     if (data.invoice_url) {
       setMessage("checkoutMessage", "Abrindo a página de pagamento...", "success");
@@ -1670,7 +1686,99 @@ async function cancelSubscription() {
 }
 
 
+// ------------------------------------------------------------
+// Páginas públicas (vendas, termos, privacidade)
+// ------------------------------------------------------------
+
+function formatVersionDate(value) {
+  // "2026-09-30" -> "30/09/2026"
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || "");
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : (value || "");
+}
+
+async function loadLegalInfo() {
+  const needsInfo = document.querySelector("[data-legal], [data-legal-seller], [data-legal-mailto]");
+  if (!needsInfo) return;
+
+  let info;
+
+  try {
+    const response = await fetch(`${API_BASE}/legal/info`);
+    if (!response.ok) return;
+    info = await response.json();
+  } catch (error) {
+    return;
+  }
+
+  info.terms_version_br = formatVersionDate(info.terms_version);
+
+  document.querySelectorAll("[data-legal]").forEach((element) => {
+    const value = info[element.dataset.legal];
+    if (value) element.textContent = value;
+  });
+
+  const sellerParts = [];
+  if (info.seller_name) sellerParts.push(info.seller_name);
+  if (info.seller_document) sellerParts.push(`${info.seller_document_label} ${info.seller_document}`);
+  if (info.seller_city) sellerParts.push(info.seller_city);
+
+  document.querySelectorAll("[data-legal-seller]").forEach((element) => {
+    element.textContent = sellerParts.join(" · ");
+  });
+
+  document.querySelectorAll("[data-legal-mailto]").forEach((element) => {
+    if (info.contact_email) {
+      element.href = `mailto:${info.contact_email}`;
+    } else {
+      element.classList.add("hidden");
+    }
+  });
+}
+
+async function loadPublicPlans() {
+  const container = document.getElementById("publicPlans");
+  if (!container) return;
+
+  let catalog;
+
+  try {
+    const response = await fetch(`${API_BASE}/billing/plans`);
+    if (!response.ok) return;
+    catalog = await response.json();
+  } catch (error) {
+    // Mantém a tabela estática que já está no HTML.
+    return;
+  }
+
+  if (!catalog.plans || !catalog.plans.length) return;
+
+  container.innerHTML = catalog.plans.map((plan) => {
+    const isFree = Number(plan.price) === 0;
+    const featured = plan.plan === "pro";
+    const price = isFree
+      ? "Grátis"
+      : `${escapeHtml(formatMoney(plan.price))}<span>/mês</span>`;
+    const limit = Number(plan.monthly_generation_limit) === -1
+      ? "Gerações ilimitadas"
+      : `${plan.monthly_generation_limit} gerações por mês`;
+    const label = isFree ? "Criar conta" : `Assinar o ${escapeHtml(plan.name)}`;
+    const buttonClass = featured ? "site-button" : "site-button site-button-outline";
+
+    return `
+      <article class="price-card${featured ? " price-card-featured" : ""}">
+        <h3>${escapeHtml(plan.name)}</h3>
+        <p class="price">${price}</p>
+        <p class="price-limit">${escapeHtml(limit)}</p>
+        <a class="${buttonClass}" href="/static/register.html">${label}</a>
+      </article>
+    `;
+  }).join("");
+}
+
+
 document.addEventListener("DOMContentLoaded", () => {
+  loadLegalInfo();
+
   const loginForm = document.getElementById("loginForm");
   const registerForm = document.getElementById("registerForm");
 

@@ -181,3 +181,22 @@ BILLING_GRACE_DAYS = int(os.getenv("BILLING_GRACE_DAYS", "3"))
 
 def billing_enabled() -> bool:
     return bool(ASAAS_API_KEY)
+
+
+# ------------------------------------------------------------
+# Dados do vendedor e documentos legais
+# ------------------------------------------------------------
+
+# Exibidos no rodapé, nos Termos de Uso e na Política de Privacidade.
+# O Decreto 7.962/2013 (comércio eletrônico) exige nome e CPF/CNPJ do
+# fornecedor visíveis no site. Ficam em variáveis de ambiente para não
+# gravar dados pessoais no repositório (que é público).
+SELLER_NAME = os.getenv("SELLER_NAME", "").strip()
+SELLER_DOCUMENT = os.getenv("SELLER_DOCUMENT", "").strip()
+CONTACT_EMAIL = os.getenv("CONTACT_EMAIL", "").strip()
+SELLER_CITY = os.getenv("SELLER_CITY", "Porto Alegre/RS").strip()
+
+# Versão vigente dos Termos/Política. Ao mudar o texto de forma relevante,
+# altere esta data: quem aceitou uma versão anterior precisa aceitar de
+# novo antes de contratar um plano.
+TERMS_VERSION = os.getenv("TERMS_VERSION", "2026-09-30").strip()
