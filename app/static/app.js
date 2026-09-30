@@ -1505,6 +1505,171 @@ function renderProjectsPage(projects) {
 }
 
 
+// ============================================================
+// Planos e assinatura (Asaas)
+// ============================================================
+
+const PLAN_LABELS = { free: "Free", pro: "Pro", team: "Team", admin: "Admin" };
+
+const SUBSCRIPTION_STATUS_LABELS = {
+  pending: "Aguardando pagamento",
+  active: "Ativa",
+  past_due: "Pagamento em atraso",
+  canceled: "Cancelada"
+};
+
+function formatMoney(value) {
+  return Number(value).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+function formatDate(value) {
+  if (!value) return "-";
+  const iso = String(value).endsWith("Z") ? value : `${value}Z`;
+  return new Date(iso).toLocaleDateString("pt-BR");
+}
+
+async function loadPlansPage() {
+  const statusBox = document.getElementById("subscriptionStatus");
+  const grid = document.getElementById("plansGrid");
+
+  if (!statusBox || !grid) return;
+
+  try {
+    const [catalog, mine] = await Promise.all([
+      apiGet("/billing/plans"),
+      apiGet("/billing/subscription")
+    ]);
+
+    renderSubscriptionStatus(mine);
+    renderPlans(catalog, mine);
+  } catch (error) {
+    setMessage("subscriptionMessage", error.message, "error");
+  }
+}
+
+function renderSubscriptionStatus(mine) {
+  const statusBox = document.getElementById("subscriptionStatus");
+  const sub = mine.subscription;
+
+  let html = `<p><strong>Plano atual:</strong> <span class="badge">${escapeHtml(PLAN_LABELS[mine.current_plan] || mine.current_plan)}</span></p>`;
+
+  if (sub) {
+    html += `
+      <p><strong>Assinatura:</strong> plano ${escapeHtml(PLAN_LABELS[sub.plan] || sub.plan)} — ${escapeHtml(SUBSCRIPTION_STATUS_LABELS[sub.status] || sub.status)}</p>
+      <p><strong>Valor:</strong> ${formatMoney(sub.value)}/mês</p>
+    `;
+
+    if (sub.current_period_end) {
+      const label = sub.status === "canceled" ? "Acesso até" : "Pago até";
+      html += `<p><strong>${label}:</strong> ${formatDate(sub.current_period_end)}</p>`;
+    }
+
+    const actions = [];
+
+    if (sub.invoice_url && ["pending", "past_due"].includes(sub.status)) {
+      actions.push(`<button onclick="window.open('${escapeHtml(sub.invoice_url)}', '_blank', 'noopener')">Pagar fatura</button>`);
+    }
+
+    if (["pending", "active", "past_due"].includes(sub.status)) {
+      actions.push(`<button class="danger" onclick="cancelSubscription()">Cancelar assinatura</button>`);
+    }
+
+    if (actions.length) {
+      html += `<div class="actions">${actions.join("")}</div>`;
+    }
+  } else {
+    html += `<p class="muted">Você ainda não tem assinatura. Escolha um plano abaixo.</p>`;
+  }
+
+  statusBox.innerHTML = html;
+}
+
+function renderPlans(catalog, mine) {
+  const grid = document.getElementById("plansGrid");
+  const sub = mine.subscription;
+  const hasPaidAccess = sub && ["active", "past_due"].includes(sub.status);
+
+  grid.innerHTML = catalog.plans.map((plan) => {
+    const isCurrent = mine.current_plan === plan.plan;
+    const price = plan.price > 0 ? `${formatMoney(plan.price)} <small>/mês</small>` : "Grátis";
+
+    let button = "";
+    if (plan.plan !== "free") {
+      if (!catalog.billing_enabled) {
+        button = `<button disabled>Em breve</button>`;
+      } else if (isCurrent) {
+        button = `<button disabled>Plano atual</button>`;
+      } else if (hasPaidAccess) {
+        button = `<button disabled title="Cancele a assinatura atual para trocar de plano">Assinar</button>`;
+      } else {
+        button = `<button onclick="showCheckout('${plan.plan}', '${escapeHtml(plan.name)}')">Assinar</button>`;
+      }
+    }
+
+    return `
+      <article class="card plan-card ${isCurrent ? "current" : ""}">
+        <h2>${escapeHtml(plan.name)}</h2>
+        <p class="plan-price">${price}</p>
+        <p>${escapeHtml(String(plan.monthly_generation_limit))} gerações por mês</p>
+        <div class="actions">${button}</div>
+      </article>
+    `;
+  }).join("");
+}
+
+function showCheckout(plan, name) {
+  document.getElementById("checkoutPlan").value = plan;
+  document.getElementById("checkoutPlanName").textContent = name;
+  document.getElementById("checkoutCard").classList.remove("hidden");
+  setMessage("checkoutMessage", "");
+  document.getElementById("checkoutName").focus();
+}
+
+function hideCheckout() {
+  document.getElementById("checkoutCard").classList.add("hidden");
+}
+
+async function handleCheckout(event) {
+  event.preventDefault();
+
+  const plan = document.getElementById("checkoutPlan").value;
+  const name = document.getElementById("checkoutName").value.trim();
+  const cpf_cnpj = document.getElementById("checkoutDocument").value.trim();
+
+  setMessage("checkoutMessage", "Gerando sua fatura...");
+
+  try {
+    const data = await apiPost("/billing/checkout", { plan, name, cpf_cnpj });
+
+    if (data.invoice_url) {
+      setMessage("checkoutMessage", "Abrindo a página de pagamento...", "success");
+      window.location.href = data.invoice_url;
+    } else {
+      setMessage("checkoutMessage", "Assinatura criada. A fatura será enviada para o seu e-mail.", "success");
+      await loadPlansPage();
+    }
+  } catch (error) {
+    setMessage("checkoutMessage", error.message, "error");
+  }
+}
+
+async function cancelSubscription() {
+  const confirmed = window.confirm(
+    "Cancelar a assinatura? Você mantém o acesso até o fim do período já pago."
+  );
+
+  if (!confirmed) return;
+
+  try {
+    await apiPost("/billing/cancel", {});
+    setMessage("subscriptionMessage", "Assinatura cancelada.", "success");
+    await loadPlansPage();
+  } catch (error) {
+    setMessage("subscriptionMessage", error.message, "error");
+  }
+}
+
+
 document.addEventListener("DOMContentLoaded", () => {
   const loginForm = document.getElementById("loginForm");
   const registerForm = document.getElementById("registerForm");
@@ -1515,5 +1680,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (registerForm) {
     registerForm.addEventListener("submit", handleRegister);
+  }
+
+  const checkoutForm = document.getElementById("checkoutForm");
+
+  if (checkoutForm) {
+    checkoutForm.addEventListener("submit", handleCheckout);
   }
 });

@@ -534,3 +534,44 @@ button.success:hover {
     min-width: auto;
   }
 }
+/* ------------------------------------------------------------
+   Planos
+------------------------------------------------------------ */
+
+.plans-grid {
+  margin-top: 24px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+button:disabled,
+button:disabled:hover {
+  background: #cbd5e1;
+  color: #475569;
+  cursor: not-allowed;
+}
+
+.plan-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.plan-card.current {
+  outline: 2px solid #2563eb;
+}
+
+.plan-price {
+  font-size: 1.8rem;
+  font-weight: 700;
+  margin: 4px 0;
+}
+
+.plan-price small {
+  font-size: 0.9rem;
+  font-weight: 400;
+  color: #64748b;
+}
+
+.plan-card .actions {
+  margin-top: auto;
+}

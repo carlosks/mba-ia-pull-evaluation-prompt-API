@@ -135,6 +135,11 @@ def ensure_user_plan_defaults(
         db.commit()
         db.refresh(user)
 
+    # Aplica o plano da assinatura paga (ou a volta ao free quando ela expira).
+    from app.services.billing_service import sync_user_plan
+
+    sync_user_plan(db, user)
+
     return user
 
 

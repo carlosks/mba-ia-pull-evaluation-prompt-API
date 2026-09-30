@@ -87,3 +87,29 @@ deploy; para não perder os projetos dos clientes, configure um bucket S3 compat
 (AWS S3, Cloudflare R2, MinIO) com `STORAGE_BUCKET`, `STORAGE_ENDPOINT_URL`,
 `AWS_ACCESS_KEY_ID` e `AWS_SECRET_ACCESS_KEY`. Cada projeto é enviado como `.zip` ao ser
 gerado e restaurado automaticamente quando alguém o acessa.
+
+## Cobrança (Asaas)
+
+Planos pagos são vendidos por assinatura mensal na [Asaas](https://www.asaas.com).
+O cliente paga na página da própria Asaas (Pix, boleto ou cartão); nenhum dado de
+cartão passa por este sistema.
+
+Fluxo:
+
+1. `GET /billing/plans` — tabela pública de planos e preços.
+2. `POST /billing/checkout` `{plan, name, cpf_cnpj}` — cria cliente e assinatura na Asaas
+   e devolve `invoice_url` (a página de pagamento).
+3. A Asaas chama `POST /billing/webhook` a cada evento. Pagamento confirmado libera o plano
+   até o próximo vencimento + `BILLING_GRACE_DAYS`.
+4. `POST /billing/cancel` — cancela a renovação; o acesso segue até o fim do período pago.
+5. Sem pagamento, ao fim do período o usuário volta ao plano free automaticamente.
+
+Eventos tratados: `PAYMENT_CONFIRMED`, `PAYMENT_RECEIVED`, `PAYMENT_OVERDUE`,
+`PAYMENT_CREATED`, `PAYMENT_REFUNDED`, `PAYMENT_CHARGEBACK_REQUESTED`,
+`SUBSCRIPTION_DELETED`, `SUBSCRIPTION_INACTIVATED`. Eventos repetidos são ignorados
+(o id de cada evento fica em `billing_events`).
+
+Configuração: `ASAAS_BASE_URL`, `ASAAS_API_KEY`, `ASAAS_WEBHOOK_TOKEN`,
+`PLAN_PRICE_PRO`, `PLAN_PRICE_TEAM`. Sem `ASAAS_API_KEY`, a página de planos mostra
+"Em breve" e o checkout fica desligado. Usuários admin nunca têm o plano alterado
+pela cobrança.

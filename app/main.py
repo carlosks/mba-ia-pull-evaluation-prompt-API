@@ -11,6 +11,7 @@ from app.config import CORS_ORIGINS, DOCS_ENABLED
 from app.rate_limit import limiter
 from app.routes.admin import router as admin_router
 from app.routes.auth import router as auth_router
+from app.routes.billing import router as billing_router
 from app.routes.jobs import router as jobs_router
 from app.routes.projects import router as projects_router
 from app.services.jobs_service import recover_jobs_on_startup
@@ -71,6 +72,10 @@ async def security_headers(request: Request, call_next):
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("X-Frame-Options", "DENY")
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    if request.url.path.startswith("/static/"):
+        # Revalida sempre (usa ETag/Last-Modified): após um deploy o navegador
+        # baixa a versão nova em vez de usar a cópia antiga do cache.
+        response.headers["Cache-Control"] = "no-cache"
     if request.url.scheme == "https":
         response.headers.setdefault(
             "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
@@ -97,3 +102,4 @@ app.include_router(auth_router, prefix="/auth", tags=["Auth"])
 app.include_router(projects_router, prefix="/projects", tags=["Projects"])
 app.include_router(admin_router, prefix="/admin", tags=["Admin"])
 app.include_router(jobs_router, prefix="/jobs", tags=["Jobs"])
+app.include_router(billing_router, prefix="/billing", tags=["Billing"])
