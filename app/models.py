@@ -139,3 +139,55 @@ class GenerationJob(Base):
     created_at = Column(DateTime, default=utc_now, index=True)
     started_at = Column(DateTime)
     finished_at = Column(DateTime)
+
+
+class Subscription(Base):
+    """
+    Assinatura de um plano pago (hoje via Asaas).
+
+    Status:
+    - pending:  criada, aguardando o primeiro pagamento
+    - active:   pagamento em dia
+    - past_due: cobrança vencida; acesso mantido até current_period_end
+    - canceled: cancelada; acesso mantido até current_period_end
+    """
+
+    __tablename__ = "subscriptions"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+
+    provider = Column(String, nullable=False, default="asaas")
+    provider_customer_id = Column(String, index=True)
+    provider_subscription_id = Column(String, unique=True, index=True)
+
+    plan = Column(String, nullable=False)
+    status = Column(String, nullable=False, default="pending", index=True)
+    value = Column(Float, nullable=False)
+
+    # Link da fatura atual (Pix, boleto ou cartão, na página da Asaas).
+    invoice_url = Column(String)
+
+    current_period_end = Column(DateTime)
+    canceled_at = Column(DateTime)
+
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
+
+
+class BillingEvent(Base):
+    """
+    Evento recebido do provedor de pagamento (webhook).
+    A chave primária é o id do evento, o que impede processar o mesmo
+    evento duas vezes (a Asaas pode reenviar eventos).
+    """
+
+    __tablename__ = "billing_events"
+
+    id = Column(String, primary_key=True)
+    provider = Column(String, nullable=False, default="asaas")
+    event_type = Column(String, nullable=False, index=True)
+    payload = Column(Text, nullable=False)
+    processed = Column(Boolean, nullable=False, default=False)
+    error = Column(Text)
+    received_at = Column(DateTime, default=utc_now, index=True)

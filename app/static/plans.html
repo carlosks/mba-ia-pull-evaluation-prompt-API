@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MBA IA - Planos</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>MBA IA - Bug Evaluation</h1>
+      <p>Planos e assinatura</p>
+    </div>
+
+    <nav>
+      <a href="/static/dashboard.html">Dashboard</a>
+      <a href="/static/projects.html">Meus Projetos</a>
+      <a id="adminLink" href="/static/admin.html" class="hidden">Admin</a>
+      <button onclick="logout()">Sair</button>
+    </nav>
+  </header>
+
+  <main class="container">
+    <section class="card">
+      <h2>Minha assinatura</h2>
+      <div id="subscriptionStatus"><p class="muted">Carregando...</p></div>
+      <p id="subscriptionMessage" class="message"></p>
+    </section>
+
+    <section id="plansGrid" class="grid plans-grid"></section>
+
+    <section id="checkoutCard" class="card hidden">
+      <h2>Assinar plano <span id="checkoutPlanName"></span></h2>
+      <p class="muted">
+        Você será levado à página segura de pagamento da Asaas, onde escolhe entre Pix, boleto ou cartão.
+        O plano é liberado automaticamente assim que o pagamento é confirmado.
+      </p>
+
+      <form id="checkoutForm">
+        <input type="hidden" id="checkoutPlan" />
+
+        <label for="checkoutName">Nome completo ou razão social</label>
+        <input id="checkoutName" type="text" minlength="3" maxlength="120" required />
+
+        <label for="checkoutDocument">CPF ou CNPJ</label>
+        <input id="checkoutDocument" type="text" inputmode="numeric" placeholder="Somente números ou com pontuação" required />
+
+        <div class="actions">
+          <button type="submit">Ir para o pagamento</button>
+          <button type="button" class="secondary" onclick="hideCheckout()">Voltar</button>
+        </div>
+      </form>
+
+      <p id="checkoutMessage" class="message"></p>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+  <script>
+    requireAuth();
+    loadDashboard();
+    loadPlansPage();
+  </script>
+</body>
+</html>

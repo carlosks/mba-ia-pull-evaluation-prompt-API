@@ -152,3 +152,32 @@ STORAGE_BUCKET = os.getenv("STORAGE_BUCKET", "").strip()
 STORAGE_ENDPOINT_URL = os.getenv("STORAGE_ENDPOINT_URL", "").strip() or None
 STORAGE_REGION = os.getenv("STORAGE_REGION", "auto")
 STORAGE_PREFIX = os.getenv("STORAGE_PREFIX", "generated_projects/").strip()
+
+
+# ------------------------------------------------------------
+# Cobrança (Asaas)
+# ------------------------------------------------------------
+
+# Sandbox: https://api-sandbox.asaas.com/v3  |  Produção: https://api.asaas.com/v3
+# As chaves de sandbox e produção são diferentes e não funcionam trocadas.
+ASAAS_BASE_URL = os.getenv("ASAAS_BASE_URL", "https://api-sandbox.asaas.com/v3").rstrip("/")
+ASAAS_API_KEY = os.getenv("ASAAS_API_KEY", "").strip()
+
+# Token que a Asaas envia no cabeçalho "asaas-access-token" de cada webhook.
+# Defina o mesmo valor no painel da Asaas (Integrações → Webhooks).
+ASAAS_WEBHOOK_TOKEN = os.getenv("ASAAS_WEBHOOK_TOKEN", "").strip()
+
+# Preço mensal (R$) de cada plano pago. Os limites de geração ficam em
+# app/services/usage_service.py (PLAN_LIMITS).
+PLAN_PRICES = {
+    "pro": float(os.getenv("PLAN_PRICE_PRO", "49.90")),
+    "team": float(os.getenv("PLAN_PRICE_TEAM", "199.90")),
+}
+
+# Dias de tolerância após o fim do período pago antes de voltar ao plano free
+# (cobre atraso de compensação de boleto e retentativas de cartão).
+BILLING_GRACE_DAYS = int(os.getenv("BILLING_GRACE_DAYS", "3"))
+
+
+def billing_enabled() -> bool:
+    return bool(ASAAS_API_KEY)
