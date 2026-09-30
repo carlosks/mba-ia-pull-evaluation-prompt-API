@@ -146,6 +146,7 @@ def _read_project_validation(project_name: str) -> Optional[Dict[str, Any]]:
         return None
 
     try:
+        ensure_local_project(project_name)
         project_dir = GENERATED_PROJECTS_DIR / project_name
         metadata_path = project_dir / "metadata.json"
 
@@ -175,6 +176,7 @@ def _read_project_metadata(project_name: str) -> Dict[str, Any]:
         return {}
 
     try:
+        ensure_local_project(project_name)
         metadata_path = GENERATED_PROJECTS_DIR / project_name / "metadata.json"
 
         if not metadata_path.exists() or not metadata_path.is_file():

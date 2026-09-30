@@ -29,6 +29,11 @@ logger = logging.getLogger("app.storage")
 
 _client = None
 
+# Projetos que já sabemos não existir no armazenamento (ex.: gerados antes
+# de o armazenamento ser configurado). Evita repetir a consulta a cada
+# carregamento da lista de projetos.
+_missing_projects: set[str] = set()
+
 
 def storage_enabled() -> bool:
     return bool(STORAGE_BUCKET)
@@ -39,11 +44,21 @@ def _get_client():
 
     if _client is None:
         import boto3  # importado só quando o armazenamento está ativo
+        from botocore.config import Config
 
         _client = boto3.client(
             "s3",
             endpoint_url=STORAGE_ENDPOINT_URL,
             region_name=STORAGE_REGION,
+            config=Config(
+                signature_version="s3v4",
+                # O boto3 >= 1.36 envia checksums extras por padrão, que
+                # alguns serviços compatíveis com S3 (ex.: Cloudflare R2)
+                # não aceitam. Só enviamos quando o serviço exigir.
+                request_checksum_calculation="when_required",
+                response_checksum_validation="when_required",
+                retries={"max_attempts": 3, "mode": "standard"},
+            ),
         )
 
     return _client
@@ -98,6 +113,12 @@ def _safe_extract(data: bytes, destination: Path) -> None:
             target.write_bytes(archive.read(member))
 
 
+def _is_not_found(exc: Exception) -> bool:
+    response = getattr(exc, "response", None) or {}
+    code = str(response.get("Error", {}).get("Code", ""))
+    return code in {"NoSuchKey", "404", "NotFound"}
+
+
 def persist_project(project_name: str | None) -> bool:
     """
     Copia o projeto do disco local para o armazenamento durável.
@@ -120,6 +141,8 @@ def persist_project(project_name: str | None) -> bool:
             Body=_zip_directory(project_dir),
             ContentType="application/zip",
         )
+        _missing_projects.discard(project_name)
+        logger.info("Projeto salvo no armazenamento: %s", project_name)
         return True
     except Exception:
         logger.exception("Falha ao enviar projeto %s para o armazenamento", project_name)
@@ -139,7 +162,7 @@ def ensure_local_project(project_name: str) -> bool:
     if project_dir.is_dir():
         return True
 
-    if not storage_enabled():
+    if not storage_enabled() or project_name in _missing_projects:
         return False
 
     try:
@@ -150,6 +173,10 @@ def ensure_local_project(project_name: str) -> bool:
         _safe_extract(response["Body"].read(), project_dir)
         logger.info("Projeto restaurado do armazenamento: %s", project_name)
         return True
-    except Exception:
+    except Exception as exc:
+        if _is_not_found(exc):
+            # Projeto antigo, gerado antes do armazenamento: não é erro.
+            _missing_projects.add(project_name)
+            return False
         logger.exception("Falha ao restaurar projeto %s do armazenamento", project_name)
         return False

@@ -346,6 +346,11 @@ async function handleRegister(event) {
   }
 }
 
+// -1 significa sem limite (plano admin ou ilimitado).
+function formatLimit(value) {
+  return Number(value) === -1 ? "Ilimitado" : value;
+}
+
 async function apiGet(path) {
   const response = await fetch(`${API_BASE}${path}`, {
     headers: authHeaders()
@@ -412,9 +417,9 @@ async function loadDashboard() {
 
     if (userEmail) userEmail.textContent = me.email;
     if (userPlan) userPlan.textContent = me.plan;
-    if (monthlyLimit) monthlyLimit.textContent = me.monthly_generation_limit;
+    if (monthlyLimit) monthlyLimit.textContent = formatLimit(me.monthly_generation_limit);
     if (monthlyUsage) monthlyUsage.textContent = me.monthly_usage;
-    if (remainingGenerations) remainingGenerations.textContent = me.remaining_generations;
+    if (remainingGenerations) remainingGenerations.textContent = formatLimit(me.remaining_generations);
     if (userAdmin) userAdmin.textContent = me.is_admin ? "Sim" : "Não";
 
     if (adminLink && me.is_admin) {
@@ -844,7 +849,7 @@ async function loadAdminUsers() {
 
         <p><strong>ID:</strong> ${user.id}</p>
         <p><strong>Plano:</strong> ${escapeHtml(user.plan)}</p>
-        <p><strong>Limite mensal:</strong> ${user.monthly_generation_limit}</p>
+        <p><strong>Limite mensal:</strong> ${formatLimit(user.monthly_generation_limit)}</p>
         <p><strong>Ativo:</strong> ${user.is_active ? "Sim" : "Não"}</p>
         <p><strong>Admin:</strong> ${user.is_admin ? "Sim" : "Não"}</p>
 
