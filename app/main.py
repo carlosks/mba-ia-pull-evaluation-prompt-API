@@ -1,13 +1,17 @@
+import hmac
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from slowapi.errors import RateLimitExceeded
 
-from app.config import CORS_ORIGINS, DOCS_ENABLED
+from app import config
+from app.config import CORS_ORIGINS
 from app.rate_limit import limiter
 from app.routes.admin import router as admin_router
 from app.routes.auth import router as auth_router
@@ -39,9 +43,10 @@ app = FastAPI(
     ),
     version="1.0.0",
     lifespan=lifespan,
-    docs_url="/docs" if DOCS_ENABLED else None,
-    redoc_url="/redoc" if DOCS_ENABLED else None,
-    openapi_url="/openapi.json" if DOCS_ENABLED else None,
+    # As rotas de documentação são criadas abaixo, com proteção opcional.
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
 )
 
 # Limite de requisições (login, cadastro e geração).
@@ -85,6 +90,59 @@ async def security_headers(request: Request, call_next):
 
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
+
+# ------------------------------------------------------------
+# Documentação interativa (Swagger)
+# ------------------------------------------------------------
+
+_docs_basic = HTTPBasic(auto_error=False, realm="Documentacao da API")
+
+
+def require_docs_access(credentials: HTTPBasicCredentials | None = Depends(_docs_basic)) -> None:
+    """
+    Sem DOCS_USERNAME/DOCS_PASSWORD: segue DOCS_ENABLED (aberto em desenvolvimento,
+    desligado em produção). Com eles: exige login, em qualquer ambiente.
+    """
+    if not config.DOCS_AVAILABLE:
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    if not config.DOCS_PROTECTED:
+        return
+
+    valid = credentials is not None and (
+        hmac.compare_digest(credentials.username.encode(), config.DOCS_USERNAME.encode())
+        & hmac.compare_digest(credentials.password.encode(), config.DOCS_PASSWORD.encode())
+    )
+
+    if not valid:
+        raise HTTPException(
+            status_code=401,
+            detail="Login necessário.",
+            headers={"WWW-Authenticate": 'Basic realm="Documentacao da API"'},
+        )
+
+
+@app.get("/openapi.json", include_in_schema=False, dependencies=[Depends(require_docs_access)])
+@limiter.limit("30/minute")
+def openapi_schema(request: Request):
+    return app.openapi()
+
+
+@app.get("/docs", include_in_schema=False, dependencies=[Depends(require_docs_access)])
+@limiter.limit("30/minute")
+def swagger_ui(request: Request):
+    return get_swagger_ui_html(
+        openapi_url="/openapi.json",
+        title=f"{app.title} - Swagger",
+        swagger_ui_parameters={"persistAuthorization": False},
+    )
+
+
+@app.get("/redoc", include_in_schema=False, dependencies=[Depends(require_docs_access)])
+@limiter.limit("30/minute")
+def redoc_ui(request: Request):
+    return get_redoc_html(openapi_url="/openapi.json", title=f"{app.title} - ReDoc")
 
 
 @app.get("/")

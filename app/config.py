@@ -99,6 +99,13 @@ CORS_ORIGINS = _env_list("CORS_ORIGINS")
 # Swagger (/docs) e OpenAPI ficam desligados em produção por padrão.
 DOCS_ENABLED = _env_bool("DOCS_ENABLED", default=not IS_PRODUCTION)
 
+# Com usuário e senha definidos, o Swagger fica disponível também em produção,
+# protegido por login (HTTP Basic). Use uma senha longa e exclusiva.
+DOCS_USERNAME = os.getenv("DOCS_USERNAME", "").strip()
+DOCS_PASSWORD = os.getenv("DOCS_PASSWORD", "").strip()
+DOCS_PROTECTED = bool(DOCS_USERNAME and DOCS_PASSWORD)
+DOCS_AVAILABLE = DOCS_ENABLED or DOCS_PROTECTED
+
 
 # ------------------------------------------------------------
 # Limites de requisição (formato do slowapi: "N/period")
