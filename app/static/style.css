@@ -1138,3 +1138,14 @@ button:disabled:hover {
     overflow-x: auto;
   }
 }
+
+.forgot-link {
+  margin: 12px 0 0;
+  text-align: right;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+  transform: none;
+}

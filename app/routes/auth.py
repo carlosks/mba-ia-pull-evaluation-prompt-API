@@ -1,14 +1,21 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
 from app import models
-from app.config import RATE_LIMIT_LOGIN, RATE_LIMIT_REGISTER
+from app.config import RATE_LIMIT_LOGIN, RATE_LIMIT_PASSWORD_RESET, RATE_LIMIT_REGISTER
 from app.rate_limit import limiter
-from app.schemas.auth import UserCreate, UserOut, Token
+from app.schemas.auth import (
+    ForgotPasswordRequest,
+    MessageOut,
+    ResetPasswordRequest,
+    Token,
+    UserCreate,
+    UserOut,
+)
 from app.security import create_access_token, get_current_user, get_db
-from app.services import legal_service
+from app.services import legal_service, password_reset_service
 from app.services.usage_service import (
     ensure_user_plan_defaults,
     get_usage_summary,
@@ -142,3 +149,38 @@ def me(
         )
 
     return build_user_out(db, user)
+
+
+@router.post("/forgot-password", response_model=MessageOut)
+@limiter.limit(RATE_LIMIT_PASSWORD_RESET)
+def forgot_password(
+    request: Request,
+    data: ForgotPasswordRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    """
+    Envia o link de "esqueci minha senha". A resposta é sempre a mesma,
+    exista ou não a conta, e o e-mail sai em segundo plano para que o
+    tempo de resposta também não revele nada.
+    """
+    pending = password_reset_service.request_reset(db, data.email)
+
+    if pending:
+        email, token = pending
+        background_tasks.add_task(password_reset_service.send_reset_email, email, token)
+
+    return {"detail": password_reset_service.REQUEST_MESSAGE}
+
+
+@router.post("/reset-password", response_model=MessageOut)
+@limiter.limit(RATE_LIMIT_PASSWORD_RESET)
+def reset_password(
+    request: Request,
+    data: ResetPasswordRequest,
+    db: Session = Depends(get_db),
+):
+    if not password_reset_service.reset_password(db, data.token, hash_password(data.password)):
+        raise HTTPException(status_code=400, detail=password_reset_service.INVALID_LINK_MESSAGE)
+
+    return {"detail": "Senha alterada. Entre com a nova senha."}

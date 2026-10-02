@@ -39,6 +39,10 @@ class User(Base):
     terms_version = Column(String, nullable=True)
     terms_accepted_at = Column(DateTime, nullable=True)
 
+    # Tokens de acesso emitidos antes desta data deixam de valer
+    # (encerra as sessões abertas quando a senha é trocada).
+    password_changed_at = Column(DateTime, nullable=True)
+
     projects = relationship(
         "Project",
         back_populates="owner",
@@ -195,3 +199,16 @@ class BillingEvent(Base):
     processed = Column(Boolean, nullable=False, default=False)
     error = Column(Text)
     received_at = Column(DateTime, default=utc_now, index=True)
+
+
+class PasswordResetToken(Base):
+    """Link de "esqueci minha senha". Guardamos só o hash do token."""
+
+    __tablename__ = "password_reset_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    token_hash = Column(String(64), nullable=False, unique=True, index=True)
+    expires_at = Column(DateTime, nullable=False)
+    used_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=utc_now)
