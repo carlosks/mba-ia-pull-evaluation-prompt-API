@@ -38,6 +38,7 @@ Configure no provedor (Render, Docker etc.) antes do deploy:
 | `DATABASE_URL` | sim | Postgres em produção. |
 | `CREATE_DEV_ADMIN` | não | Ignorada em produção. |
 | `CORS_ORIGINS` | não | Só se outro domínio for chamar a API. |
+| `DOCS_USERNAME` / `DOCS_PASSWORD` | não | Liberam o Swagger (`/docs`) em produção, protegido por login. |
 | `RATE_LIMIT_*` | não | Limites por IP de login, cadastro e geração. |
 
 Gere uma `SECRET_KEY` com:

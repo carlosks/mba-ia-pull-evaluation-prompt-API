@@ -43,6 +43,11 @@ services:
         sync: false
       - key: CONTACT_EMAIL
         sync: false
+      # Swagger (/docs) protegido por login. Sem os dois, fica desligado.
+      - key: DOCS_USERNAME
+        sync: false
+      - key: DOCS_PASSWORD
+        sync: false
       # E-mail (SMTP) para "Esqueci minha senha". Planos pagos do Render liberam SMTP.
       - key: SMTP_HOST
         value: smtp.gmail.com
