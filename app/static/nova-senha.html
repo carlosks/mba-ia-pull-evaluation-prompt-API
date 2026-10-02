@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="referrer" content="no-referrer" />
+  <title>MBA IA - Criar nova senha</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <main class="auth-container">
+    <section class="auth-card">
+      <h1>MBA IA</h1>
+      <h2>Criar nova senha</h2>
+
+      <div id="resetMissingToken" class="hidden">
+        <p class="muted">
+          Este endereço está incompleto. Abra o link exatamente como chegou no e-mail,
+          ou peça um novo.
+        </p>
+        <p><a href="/static/esqueci-senha.html">Pedir um novo link</a></p>
+      </div>
+
+      <form id="resetForm">
+        <label for="resetPassword">Nova senha</label>
+        <input id="resetPassword" type="password" placeholder="Mínimo de 8 caracteres" minlength="8" autocomplete="new-password" required />
+
+        <label for="resetPasswordConfirm">Confirmar nova senha</label>
+        <input id="resetPasswordConfirm" type="password" placeholder="Repita a nova senha" autocomplete="new-password" required />
+
+        <button type="submit">Salvar nova senha</button>
+      </form>
+
+      <p id="resetMessage" class="message"></p>
+
+      <p class="muted small">
+        <a href="/static/login.html">Voltar para o login</a>
+      </p>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

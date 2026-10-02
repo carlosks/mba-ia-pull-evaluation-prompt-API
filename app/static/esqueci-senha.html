@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MBA IA - Esqueci minha senha</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <main class="auth-container">
+    <section class="auth-card">
+      <h1>MBA IA</h1>
+      <h2>Esqueci minha senha</h2>
+
+      <p class="muted">
+        Informe o e-mail da sua conta. Vamos enviar um link para você criar uma nova senha.
+      </p>
+
+      <form id="forgotForm">
+        <label for="forgotEmail">E-mail</label>
+        <input id="forgotEmail" type="email" placeholder="seu-email@exemplo.com" autocomplete="email" required />
+
+        <button type="submit">Enviar link</button>
+      </form>
+
+      <p id="forgotMessage" class="message"></p>
+
+      <p class="muted small">
+        Lembrou a senha? <a href="/static/login.html">Entrar</a>
+      </p>
+
+      <p class="auth-legal-links">
+        <a href="/static/index.html">Página inicial</a> ·
+        <a href="/static/termos.html">Termos</a> ·
+        <a href="/static/privacidade.html">Privacidade</a>
+      </p>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

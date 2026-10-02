@@ -1687,6 +1687,103 @@ async function cancelSubscription() {
 
 
 // ------------------------------------------------------------
+// Esqueci minha senha
+// ------------------------------------------------------------
+
+async function handleForgotPassword(event) {
+  event.preventDefault();
+
+  const email = document.getElementById("forgotEmail").value.trim();
+  const button = event.target.querySelector("button[type=submit]");
+
+  setMessage("forgotMessage", "Enviando...");
+  if (button) button.disabled = true;
+
+  try {
+    const response = await fetch(`${API_BASE}/auth/forgot-password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email })
+    });
+    const data = await safeJson(response);
+
+    if (!response.ok) {
+      const detail = Array.isArray(data.detail) ? "Informe um e-mail válido." : data.detail;
+      throw new Error(detail || "Não foi possível enviar agora. Tente novamente.");
+    }
+
+    setMessage("forgotMessage", data.detail, "success");
+  } catch (error) {
+    setMessage("forgotMessage", error.message, "error");
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+function getResetTokenFromUrl() {
+  const params = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  return params.get("token") || "";
+}
+
+function setupResetPage() {
+  const form = document.getElementById("resetForm");
+  if (!form) return;
+
+  if (!getResetTokenFromUrl()) {
+    form.classList.add("hidden");
+    document.getElementById("resetMissingToken").classList.remove("hidden");
+  }
+}
+
+async function handleResetPassword(event) {
+  event.preventDefault();
+
+  const token = getResetTokenFromUrl();
+  const password = document.getElementById("resetPassword").value;
+  const confirm = document.getElementById("resetPasswordConfirm").value;
+
+  if (password.length < 8) {
+    setMessage("resetMessage", "A senha precisa ter pelo menos 8 caracteres.", "error");
+    return;
+  }
+
+  if (password !== confirm) {
+    setMessage("resetMessage", "As senhas não conferem.", "error");
+    return;
+  }
+
+  setMessage("resetMessage", "Salvando...");
+
+  try {
+    const response = await fetch(`${API_BASE}/auth/reset-password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token, password })
+    });
+    const data = await safeJson(response);
+
+    if (!response.ok) {
+      const detail = Array.isArray(data.detail)
+        ? "Este link é inválido ou expirou. Peça um novo em \"Esqueci minha senha\"."
+        : data.detail;
+      throw new Error(detail || "Não foi possível alterar a senha.");
+    }
+
+    // Tira o token da barra de endereços e encerra a sessão antiga deste navegador.
+    history.replaceState(null, "", window.location.pathname);
+    clearToken();
+    document.getElementById("resetForm").classList.add("hidden");
+    setMessage("resetMessage", "Senha alterada. Redirecionando para o login...", "success");
+
+    setTimeout(() => {
+      window.location.href = "/static/login.html";
+    }, 1800);
+  } catch (error) {
+    setMessage("resetMessage", error.message, "error");
+  }
+}
+
+// ------------------------------------------------------------
 // Páginas públicas (vendas, termos, privacidade)
 // ------------------------------------------------------------
 
@@ -1788,6 +1885,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (registerForm) {
     registerForm.addEventListener("submit", handleRegister);
+  }
+
+  const forgotForm = document.getElementById("forgotForm");
+
+  if (forgotForm) {
+    forgotForm.addEventListener("submit", handleForgotPassword);
+  }
+
+  const resetForm = document.getElementById("resetForm");
+
+  if (resetForm) {
+    setupResetPage();
+    resetForm.addEventListener("submit", handleResetPassword);
   }
 
   const checkoutForm = document.getElementById("checkoutForm");

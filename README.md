@@ -124,3 +124,15 @@ pela cobrança.
 - O cadastro exige o aceite dos termos; a data e a versão (`TERMS_VERSION`) ficam
   em `users.terms_accepted_at` / `users.terms_version`. Contas sem o aceite da
   versão vigente precisam marcá-lo ao assinar um plano.
+
+## Esqueci minha senha
+
+- `POST /auth/forgot-password` `{email}` responde sempre a mesma mensagem (não revela
+  quais e-mails têm conta) e envia o link em segundo plano.
+- O link (`/static/nova-senha.html#token=...`) vale `PASSWORD_RESET_EXPIRE_MINUTES`
+  (padrão 60) e é de uso único; no banco fica só o hash SHA-256 do token.
+- `POST /auth/reset-password` `{token, password}` troca a senha, invalida os outros
+  links pendentes e encerra as sessões abertas (`users.password_changed_at`).
+- Limites: `RATE_LIMIT_PASSWORD_RESET` por IP e `PASSWORD_RESET_MAX_PER_HOUR` por conta.
+- Envio por SMTP (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`,
+  `EMAIL_FROM`). O plano gratuito do Render bloqueia portas SMTP.

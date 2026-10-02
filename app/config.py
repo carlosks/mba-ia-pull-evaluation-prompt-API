@@ -200,3 +200,39 @@ SELLER_CITY = os.getenv("SELLER_CITY", "Porto Alegre/RS").strip()
 # altere esta data: quem aceitou uma versão anterior precisa aceitar de
 # novo antes de contratar um plano.
 TERMS_VERSION = os.getenv("TERMS_VERSION", "2026-09-30").strip()
+
+
+# ------------------------------------------------------------
+# E-mail (SMTP) e recuperação de senha
+# ------------------------------------------------------------
+
+# Qualquer servidor SMTP serve: Gmail (senha de app), Brevo, Resend etc.
+# Porta 587 usa STARTTLS; porta 465 usa SSL direto.
+# Atenção: o plano gratuito do Render bloqueia portas SMTP; os pagos liberam.
+SMTP_HOST = os.getenv("SMTP_HOST", "").strip()
+SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+SMTP_USERNAME = os.getenv("SMTP_USERNAME", "").strip()
+# Senhas de app do Gmail são exibidas com espaços; removemos para aceitar colada.
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "").replace(" ", "").strip()
+SMTP_USE_SSL = _env_bool("SMTP_USE_SSL", default=SMTP_PORT == 465)
+
+# Remetente. Com Gmail, precisa ser o próprio endereço da conta.
+EMAIL_FROM = os.getenv("EMAIL_FROM", "").strip() or SMTP_USERNAME
+EMAIL_FROM_NAME = os.getenv("EMAIL_FROM_NAME", "MBA IA - Bug Evaluation").strip()
+
+# Endereço público do site, usado nos links enviados por e-mail.
+# O Render define RENDER_EXTERNAL_URL automaticamente.
+PUBLIC_BASE_URL = (
+    os.getenv("PUBLIC_BASE_URL", "").strip()
+    or os.getenv("RENDER_EXTERNAL_URL", "").strip()
+    or "http://localhost:8000"
+).rstrip("/")
+
+PASSWORD_RESET_EXPIRE_MINUTES = int(os.getenv("PASSWORD_RESET_EXPIRE_MINUTES", "60"))
+# Limite por IP e por conta para pedidos de recuperação.
+RATE_LIMIT_PASSWORD_RESET = os.getenv("RATE_LIMIT_PASSWORD_RESET", "5/hour")
+PASSWORD_RESET_MAX_PER_HOUR = int(os.getenv("PASSWORD_RESET_MAX_PER_HOUR", "3"))
+
+
+def email_enabled() -> bool:
+    return bool(SMTP_HOST and EMAIL_FROM)

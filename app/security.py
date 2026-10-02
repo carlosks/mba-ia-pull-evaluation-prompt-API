@@ -24,8 +24,9 @@ def get_db():
 # TOKEN
 def create_access_token(data: dict):
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
+    now = datetime.now(timezone.utc)
+    expire = now + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire, "iat": int(now.timestamp())})
 
     return jwt.encode(to_encode, SECRET_KEY, algorithm=JWT_ALGORITHM)
 
@@ -62,6 +63,16 @@ def get_current_user(
 
     if not user:
         raise credentials_error
+
+    # Depois de uma troca de senha, tokens emitidos antes dela não valem mais.
+    if user.password_changed_at is not None:
+        changed_at = user.password_changed_at
+        if changed_at.tzinfo is None:
+            changed_at = changed_at.replace(tzinfo=timezone.utc)
+
+        issued_at = payload.get("iat")
+        if not isinstance(issued_at, (int, float)) or int(issued_at) < int(changed_at.timestamp()):
+            raise credentials_error
 
     # Usuário desativado pelo admin perde o acesso imediatamente,
     # mesmo que ainda tenha um token válido.
